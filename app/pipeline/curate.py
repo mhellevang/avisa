@@ -5,6 +5,7 @@ from sqlmodel import select
 from .. import progress, runtime_config
 from ..config import settings
 from ..db import get_session
+from ..i18n import lang_prompt_name
 from ..llm import curate_articles
 from ..models import Article, utcnow
 
@@ -47,7 +48,10 @@ def curate() -> int:
                 print(f"[curate] hoppet over {skipped} bak betalingsmur")
 
         ranked = curate_articles(
-            rankable, runtime_config.preferences(), runtime_config.front_page_size()
+            rankable,
+            runtime_config.preferences(),
+            runtime_config.front_page_size(),
+            target=lang_prompt_name(runtime_config.paper_lang()),
         )
         by_id = {a.id: a for a in candidates}
 

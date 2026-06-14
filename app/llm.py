@@ -141,8 +141,9 @@ def _extract_json(text: Optional[str]):
 # --------------------------------------------------------------------------- #
 # Kuratering
 # --------------------------------------------------------------------------- #
-def curate_articles(articles, preferences: str, n: int) -> list[dict]:
-    """Returnerer liste av {id, score, section, reason} for de valgte sakene."""
+def curate_articles(articles, preferences: str, n: int, target: str = "norsk bokmål") -> list[dict]:
+    """Returnerer liste av {id, score, section, reason} for de valgte sakene.
+    Seksjonsnavn og begrunnelse gis på målspråket `target`."""
     # Sorter etter ferskhet og kapp til et fornuftig antall kandidater.
     cands = sorted(
         articles,
@@ -176,7 +177,8 @@ def curate_articles(articles, preferences: str, n: int) -> list[dict]:
         f"Velg de {n} beste sakene fra kandidatlisten under. Ranger dem, gi "
         f"hver en score mellom 0 og 1, plasser dem i en passende seksjon "
         f"(f.eks. Innenriks, Utenriks, Teknologi, Vitenskap, Klima, Økonomi, "
-        f"Kultur), og gi en kort begrunnelse.\n\n"
+        f"Kultur), og gi en kort begrunnelse. Skriv seksjonsnavn og begrunnelse "
+        f"på {target}.\n\n"
         f"Kandidater (id<TAB>tekst):\n{listing}\n\n"
         f'Svar KUN med JSON på formen: '
         f'[{{"id": <int>, "score": <0-1>, "section": "<str>", "reason": "<str>"}}]'
@@ -201,20 +203,20 @@ def curate_articles(articles, preferences: str, n: int) -> list[dict]:
 # Oversettelse til norsk
 # --------------------------------------------------------------------------- #
 def translate_to_norwegian(
-    title: str, summary: str, content: str = ""
+    title: str, summary: str, content: str = "", target: str = "norsk bokmål"
 ) -> Optional[dict]:
-    """Returnerer {title, summary, content} på norsk bokmål, eller None hvis
+    """Returnerer {title, summary, content} på målspråket, eller None hvis
     ingen nøkkel / kallet feiler. Brødtekst kappes for å holde kostnaden nede."""
     if not enabled():
         return None
     body = (content or "")[: settings.translate_body_max_chars]
     system = (
-        "Du er en profesjonell oversetter. Oversett til naturlig norsk bokmål. "
+        f"Du er en profesjonell oversetter. Oversett til naturlig {target}. "
         "Behold egennavn og avsnittsinndeling. Hvis teksten allerede er på "
-        "norsk, returner den uendret. Ikke legg til kommentarer."
+        f"{target}, returner den uendret. Ikke legg til kommentarer."
     )
     user = (
-        "Oversett feltene under til norsk bokmål. Behold linjeskift i 'content'. "
+        f"Oversett feltene under til {target}. Behold linjeskift i 'content'. "
         "Svar KUN med JSON: "
         '{"title": "<tittel>", "summary": "<ingress>", "content": "<brødtekst>"}\n\n'
         f"title: {title}\n"
@@ -229,7 +231,7 @@ def translate_to_norwegian(
     return None
 
 
-def translate_batch(items: list[dict]) -> dict[int, dict]:
+def translate_batch(items: list[dict], target: str = "norsk bokmål") -> dict[int, dict]:
     """Oversetter flere artikler i ÉTT kall. items: [{id, title, summary, content}].
     Returnerer {id: {title, summary, content}}. Amortiserer den dyre
     claude-CLI-oppstarten over flere artikler. {} uten LLM eller ved feil."""
@@ -248,12 +250,12 @@ def translate_batch(items: list[dict]) -> dict[int, dict]:
             f"BRØDTEKST:\n{body}"
         )
     system = (
-        "Du er en profesjonell oversetter. Oversett til naturlig norsk bokmål. "
-        "Behold egennavn og avsnittsinndeling. Tekst som alt er på norsk beholdes "
-        "uendret."
+        f"Du er en profesjonell oversetter. Oversett til naturlig {target}. "
+        f"Behold egennavn og avsnittsinndeling. Tekst som alt er på {target} "
+        "beholdes uendret."
     )
     user = (
-        "Oversett HVER artikkel under til norsk bokmål. Behold linjeskift i "
+        f"Oversett HVER artikkel under til {target}. Behold linjeskift i "
         "brødteksten, og behold id-en for hver artikkel.\n"
         'Svar KUN med en JSON-array: '
         '[{"id": <int>, "title": "<tittel>", "summary": "<ingress>", "content": "<brødtekst>"}]\n\n'
@@ -272,7 +274,7 @@ def translate_batch(items: list[dict]) -> dict[int, dict]:
     return out
 
 
-def translate_headlines_batch(items: list[dict]) -> dict[int, dict]:
+def translate_headlines_batch(items: list[dict], target: str = "norsk bokmål") -> dict[int, dict]:
     """Oversetter KUN tittel+ingress for flere artikler i ÉTT kall — billig
     foroversetting for «flere saker»-lista. items: [{id, title, summary}].
     Returnerer {id: {title, summary}}. {} uten LLM eller ved feil."""
@@ -287,11 +289,11 @@ def translate_headlines_batch(items: list[dict]) -> dict[int, dict]:
             f"INGRESS: {it.get('summary', '')}"
         )
     system = (
-        "Du er en profesjonell oversetter. Oversett til naturlig norsk bokmål. "
-        "Behold egennavn. Tekst som alt er på norsk beholdes uendret."
+        f"Du er en profesjonell oversetter. Oversett til naturlig {target}. "
+        f"Behold egennavn. Tekst som alt er på {target} beholdes uendret."
     )
     user = (
-        "Oversett tittel og ingress for HVER artikkel under til norsk bokmål, "
+        f"Oversett tittel og ingress for HVER artikkel under til {target}, "
         "og behold id-en.\n"
         'Svar KUN med en JSON-array: '
         '[{"id": <int>, "title": "<tittel>", "summary": "<ingress>"}]\n\n'
@@ -310,20 +312,20 @@ def translate_headlines_batch(items: list[dict]) -> dict[int, dict]:
     return out
 
 
-def translate_body(title: str, content: str) -> Optional[str]:
-    """Oversetter KUN brødteksten til norsk bokmål (tittel som kontekst).
+def translate_body(title: str, content: str, target: str = "norsk bokmål") -> Optional[str]:
+    """Oversetter KUN brødteksten til målspråket (tittel som kontekst).
     Returnerer teksten, eller None uten LLM / ved feil. Brukt ved åpning av
     saker som ikke alt er foroversatt."""
     if not enabled() or not content:
         return None
     body = content[: settings.translate_body_max_chars]
     system = (
-        "Du er en profesjonell oversetter. Oversett til naturlig norsk bokmål. "
-        "Behold egennavn og avsnittsinndeling. Hvis teksten alt er på norsk, "
+        f"Du er en profesjonell oversetter. Oversett til naturlig {target}. "
+        f"Behold egennavn og avsnittsinndeling. Hvis teksten alt er på {target}, "
         "returner den uendret. Ikke legg til kommentarer."
     )
     user = (
-        "Oversett brødteksten under til norsk bokmål. Behold linjeskift. "
+        f"Oversett brødteksten under til {target}. Behold linjeskift. "
         'Svar KUN med JSON: {"content": "<brødtekst>"}\n\n'
         f"TITTEL (kontekst): {title}\n"
         f"BRØDTEKST:\n{body}"

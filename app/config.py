@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     # Pipeline / avis
     poll_minutes: int = 30
     front_page_size: int = 12
+    # Avisas målspråk (ISO-kode). Innhold oversettes TIL dette, og grensesnittet
+    # vises på dette språket (hvis lokalisert — ellers fallback til norsk).
+    paper_lang: str = "no"
 
     # Innholdshenting (fulltekst)
     content_fetch_limit: int = 40  # maks nye saker som fulltekst-hentes per kjør
@@ -32,10 +35,10 @@ class Settings(BaseSettings):
     translate_concurrency: int = 4  # antall oversettelses-kall som kjøres samtidig
     translate_batch_chars: int = 9000  # maks tegn samlet per batch-kall
     translate_batch_max: int = 5  # maks artikler per batch-kall
-    # Komma-separerte språkkoder som IKKE oversettes (kildens lang matches mot
-    # denne). "no" er med fordi norsk→norsk er bortkastet; legg til "en" e.l. i
-    # innstillinger hvis du leser originalspråket fint selv.
-    translate_skip_langs: str = "no"
+    # Komma-separerte språkkoder du vil la stå URØRT selv om de avviker fra
+    # målspråket (du leser dem fint selv). Saker på målspråket oversettes aldri
+    # uansett. Tom som default — målspråket alene styrer hva som oversettes.
+    translate_skip_langs: str = ""
     translate_headlines_limit: int = 80  # maks ferske saker som får foroversatt tittel/ingress
     paper_title: str = "Morgenavisa"
     preferences: str = (

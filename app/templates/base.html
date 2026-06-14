@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="no">
+<html lang="{{ ui_lang() }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -13,7 +13,7 @@
   <div class="paper">
     {% block body %}{% endblock %}
     <footer class="colophon">
-      <span>{{ paper_title() }}</span> · en personlig avis · bygget i bakgrunnen, alltid klar
+      <span>{{ paper_title() }}</span> · {{ t("en personlig avis · bygget i bakgrunnen, alltid klar") }}
     </footer>
   </div>
 </body>

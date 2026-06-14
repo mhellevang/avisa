@@ -47,10 +47,12 @@ class Article(SQLModel, table=True):
     selected: bool = False
     curate_reason: str = ""
 
-    # Oversettelse (norsk). None = ikke oversatt ennå.
+    # Oversettelse til avisas målspråk. Kolonnenavnene har historisk "_no", men
+    # innholdet er på det språket translated_lang angir (None = ikke oversatt).
     title_no: Optional[str] = None
     summary_no: Optional[str] = None
     content_no: Optional[str] = None
+    translated_lang: Optional[str] = None  # språkkode cachen er oversatt til
     translated_at: Optional[datetime] = None
 
     # Visnings-hjelpere (norsk hvis tilgjengelig, ellers original)

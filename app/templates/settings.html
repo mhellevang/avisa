@@ -1,17 +1,17 @@
 {% extends "base.html" %}
-{% block title %}Innstillinger — {{ paper_title() }}{% endblock %}
+{% block title %}{{ t("Innstillinger") }} — {{ paper_title() }}{% endblock %}
 {% block body %}
 <header class="article-head">
   <a class="back" href="/">← {{ paper_title() }}</a>
-  <h2 class="more-title">Innstillinger</h2>
-  {% if auth_enabled %}<form action="/logout" method="post" class="refresh-form" style="margin-top:6px"><button type="submit">Logg ut</button></form>{% endif %}
+  <h2 class="more-title">{{ t("Innstillinger") }}</h2>
+  {% if auth_enabled %}<form action="/logout" method="post" class="refresh-form" style="margin-top:6px"><button type="submit">{{ t("Logg ut") }}</button></form>{% endif %}
 </header>
 
-{% if saved %}<p class="saved-note">✓ Lagret.</p>{% endif %}
+{% if saved %}<p class="saved-note">{{ t("✓ Lagret.") }}</p>{% endif %}
 {% if msg %}<p class="saved-note">{{ msg }}</p>{% endif %}
 
 <section class="settings-block configurator" id="chat">
-  <h3>💬 Snakk med konfiguratoren</h3>
+  <h3>{{ t("💬 Snakk med konfiguratoren") }}</h3>
   {% if llm_enabled %}
   {% if chat %}
   <div class="chat-log">
@@ -19,13 +19,13 @@
     <div class="bubble {{ 'me' if m.role == 'user' else 'bot' }}">{{ m.text }}</div>
     {% endfor %}
   </div>
-  <form action="/configure/clear" method="post" class="clear-chat"><button type="submit">Tøm samtale</button></form>
+  <form action="/configure/clear" method="post" class="clear-chat"><button type="submit">{{ t("Tøm samtale") }}</button></form>
   {% else %}
-  <p class="settings-hint">Skriv med egne ord hva du vil endre — eller spør om oppsettet. Den svarer og utfører.</p>
+  <p class="settings-hint">{{ t("Skriv med egne ord hva du vil endre — eller spør om oppsettet. Den svarer og utfører.") }}</p>
   {% endif %}
   <form action="/configure" method="post" class="settings-form" id="chat-form">
     <textarea name="command" id="chat-input" rows="2" placeholder="f.eks. «Legg til aftenposten.no, fjern Hacker News, og mer om klima» — eller «hvilke kilder har jeg?» (Enter for å sende, Shift+Enter for ny linje)" required></textarea>
-    <button type="submit">Send</button>
+    <button type="submit">{{ t("Send") }}</button>
   </form>
   <script>
     (function () {
@@ -47,40 +47,53 @@
   </p>
   {% endif %}
   {% else %}
-  <p class="settings-hint">Krever en LLM. Sett <code>OPENROUTER_API_KEY</code>, eller kjør lokalt med en innlogget <code>claude</code>-session, så kan du styre alt med fritekst her.</p>
+  <p class="settings-hint">{{ t("Krever en LLM. Sett") }} <code>OPENROUTER_API_KEY</code>, {{ t("eller kjør lokalt med en innlogget") }} <code>claude</code>{{ t("-session, så kan du styre alt med fritekst her.") }}</p>
   {% endif %}
 </section>
 
 <section class="settings-block">
-  <h3>Avis & profil</h3>
-  <p class="settings-hint">LLM: <strong>{{ provider_label }}</strong></p>
+  <h3>{{ t("Avis & profil") }}</h3>
+  <p class="settings-hint">{{ t("LLM:") }} <strong>{{ provider_label }}</strong></p>
   <form action="/settings" method="post" class="settings-form">
-    <label>Tittel
+    <label>{{ t("Tittel") }}
       <input type="text" name="paper_title" value="{{ paper_title_val }}" required>
     </label>
-    <label>Redaksjonell profil (styrer kurateringen)
+    <label>{{ t("Redaksjonell profil (styrer kurateringen)") }}
       <textarea name="preferences" rows="5" required>{{ preferences_val }}</textarea>
     </label>
     <div class="settings-row">
-      <label>Saker på forsiden
+      <label>{{ t("Saker på forsiden") }}
         <input type="number" name="front_page_size" min="1" max="60" value="{{ front_page_size_val }}">
       </label>
-      <label>Poll-intervall (minutter)
+      <label>{{ t("Poll-intervall (minutter)") }}
         <input type="number" name="poll_minutes" min="1" max="1440" value="{{ poll_minutes_val }}">
       </label>
     </div>
-    <label>Språk som ikke oversettes (komma-separerte koder)
-      <input type="text" name="skip_langs" value="{{ skip_langs_val }}" placeholder="no, en">
-      <span class="settings-hint">Saker fra kilder på disse språkene vises på originalspråk. «no» er med fordi norsk ikke trenger oversettelse — legg til «en» hvis du leser engelsk fint selv.</span>
+    <label>{{ t("Avisas språk") }}
+      <select name="paper_lang">
+        {% for code, label in ui_lang_options %}
+        <option value="{{ code }}"{% if code == paper_lang_val %} selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <span class="settings-hint">{{ t("Innhold oversettes til dette språket, og grensesnittet vises på det (om lokalisert).") }}</span>
     </label>
-    <button type="submit">Lagre</button>
+    {% if skip_options %}
+    <fieldset class="lang-skip">
+      <legend>{{ t("La stå urørt (ikke oversett disse kildespråkene)") }}</legend>
+      {% for code, label in skip_options %}
+      <label class="check"><input type="checkbox" name="skip_langs" value="{{ code }}"{% if code in skip_langs_set %} checked{% endif %}> {{ label }}</label>
+      {% endfor %}
+      <span class="settings-hint">{{ t("Saker fra disse kildespråkene vises på originalspråk selv om de avviker fra avisas språk.") }}</span>
+    </fieldset>
+    {% endif %}
+    <button type="submit">{{ t("Lagre") }}</button>
   </form>
 </section>
 
 <section class="settings-block">
-  <h3>Kilder</h3>
+  <h3>{{ t("Kilder") }}</h3>
   <table class="sources-table">
-    <thead><tr><th>Navn</th><th>Type</th><th>Seksjon</th><th>Språk</th><th>Status</th><th></th></tr></thead>
+    <thead><tr><th>{{ t("Navn") }}</th><th>{{ t("Type") }}</th><th>{{ t("Seksjon") }}</th><th>{{ t("Språk") }}</th><th>{{ t("Status") }}</th><th></th></tr></thead>
     <tbody>
       {% for src in sources %}
       <tr class="{{ 'src-off' if not src.enabled }}">
@@ -89,50 +102,60 @@
         <td>{{ src.section }}</td>
         <td>
           <form action="/sources/{{ src.id }}/lang" method="post" class="lang-form">
-            <input type="text" name="lang" value="{{ src.lang }}" maxlength="5" size="3" onchange="this.form.requestSubmit()" title="Språkkode, f.eks. no eller en">
+            <select name="lang" onchange="this.form.requestSubmit()">
+              {% for code, label in source_lang_options %}
+              <option value="{{ code }}"{% if code == src.lang %} selected{% endif %}>{{ code }}</option>
+              {% endfor %}
+            </select>
           </form>
         </td>
-        <td>{{ 'På' if src.enabled else 'Av' }}</td>
+        <td>{{ t("På") if src.enabled else t("Av") }}</td>
         <td class="src-actions">
-          <form action="/sources/{{ src.id }}/toggle" method="post"><button type="submit">{{ 'Skru av' if src.enabled else 'Skru på' }}</button></form>
-          <form action="/sources/{{ src.id }}/delete" method="post" onsubmit="return confirm('Slette {{ src.name }}?')"><button type="submit" class="danger">Slett</button></form>
+          <form action="/sources/{{ src.id }}/toggle" method="post"><button type="submit">{{ t("Skru av") if src.enabled else t("Skru på") }}</button></form>
+          <form action="/sources/{{ src.id }}/delete" method="post" onsubmit="return confirm('{{ src.name }}?')"><button type="submit" class="danger">{{ t("Slett") }}</button></form>
         </td>
       </tr>
       {% else %}
-      <tr><td colspan="6" class="empty">Ingen kilder ennå.</td></tr>
+      <tr><td colspan="6" class="empty">{{ t("Ingen kilder ennå.") }}</td></tr>
       {% endfor %}
     </tbody>
   </table>
 
-  <h4>Legg til kilde — bare lim inn en URL eller et navn</h4>
+  <h4>{{ t("Legg til kilde — bare lim inn en URL eller et navn") }}</h4>
   <form action="/sources/discover" method="post" class="settings-form smart-add">
     <div class="settings-row">
       <input type="text" name="query" placeholder="f.eks. nrk.no eller https://www.aftenposten.no" required>
-      <button type="submit">Finn ut av det</button>
+      <button type="submit">{{ t("Finn ut av det") }}</button>
     </div>
     <p class="settings-hint">Vi finner RSS-feeden automatisk{% if llm_enabled %} og lar Claude navngi og seksjonere den{% endif %}.</p>
   </form>
 
   <details class="advanced">
-    <summary>Avansert: legg til manuelt</summary>
+    <summary>{{ t("Avansert: legg til manuelt") }}</summary>
     <form action="/sources/add" method="post" class="settings-form">
-      <label>Navn <input type="text" name="name" required></label>
+      <label>{{ t("Navn") }} <input type="text" name="name" required></label>
       <div class="settings-row">
-        <label>Type
+        <label>{{ t("Type") }}
           <select name="kind">
             <option value="rss">rss</option>
             <option value="api">api</option>
             <option value="playwright">playwright</option>
           </select>
         </label>
-        <label>Seksjon <input type="text" name="section" value="Nyheter"></label>
-        <label>Språk <input type="text" name="lang" value="en" maxlength="5" size="3" title="Språkkode, f.eks. no eller en"></label>
+        <label>{{ t("Seksjon") }} <input type="text" name="section" value="Nyheter"></label>
+        <label>{{ t("Språk") }}
+          <select name="lang">
+            {% for code, label in source_lang_options %}
+            <option value="{{ code }}"{% if code == 'en' %} selected{% endif %}>{{ code }}</option>
+            {% endfor %}
+          </select>
+        </label>
       </div>
-      <label>URL <input type="url" name="url" required></label>
+      <label>{{ t("URL") }} <input type="url" name="url" required></label>
       <label>Config (JSON, valgfritt — f.eks. <code>{"link_selector": "a.article"}</code> for playwright)
         <input type="text" name="config" placeholder="{}">
       </label>
-      <button type="submit">Legg til</button>
+      <button type="submit">{{ t("Legg til") }}</button>
     </form>
   </details>
 </section>

@@ -13,6 +13,7 @@ DEFAULTS: dict[str, str] = {
     "front_page_size": str(settings.front_page_size),
     "poll_minutes": str(settings.poll_minutes),
     "translate_skip_langs": settings.translate_skip_langs,
+    "paper_lang": settings.paper_lang,
 }
 
 
@@ -57,12 +58,22 @@ def poll_minutes() -> int:
     return _as_int("poll_minutes", settings.poll_minutes)
 
 
+def paper_lang() -> str:
+    """Avisas målspråk (ISO-kode)."""
+    return (get("paper_lang") or "no").strip().lower()
+
+
 def skip_langs() -> set[str]:
-    """Språkkoder som ikke skal oversettes (kildens lang matches mot denne)."""
+    """Kildespråk brukeren eksplisitt vil la stå urørt (utenom målspråket)."""
     raw = get("translate_skip_langs")
     return {p.strip().lower() for p in raw.split(",") if p.strip()}
 
 
 def should_translate(source_lang: str) -> bool:
-    """True hvis en sak fra en kilde med dette språket skal oversettes."""
-    return (source_lang or "").strip().lower() not in skip_langs()
+    """True hvis en sak fra en kilde med dette språket skal oversettes til
+    målspråket. Oversett aldri det som alt er på målspråket eller står i
+    brukerens «la stå urørt»-liste."""
+    sl = (source_lang or "").strip().lower()
+    if not sl:
+        return True  # ukjent språk → oversett heller enn å vise fremmedspråk
+    return sl != paper_lang() and sl not in skip_langs()

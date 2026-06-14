@@ -5,6 +5,7 @@ from sqlmodel import select
 from .. import progress, runtime_config
 from ..config import settings
 from ..db import get_session
+from ..i18n import lang_prompt_name
 from ..llm import translate_batch, translate_headlines_batch
 from ..models import Article, Source, utcnow
 
@@ -40,6 +41,8 @@ def translate() -> int:
     """Oversetter KUN valgte (kuraterte) artikler som ikke alt er oversatt.
     Batcher flere artikler per kall OG kjører batchene parallelt. Caches på
     artikkelen (translated_at). Re-oversett: nullstill translated_at."""
+    plang = runtime_config.paper_lang()
+    target = lang_prompt_name(plang)
     langs = _source_langs()
     with get_session() as s:
         arts = s.exec(
@@ -71,7 +74,7 @@ def translate() -> int:
     done = 0
     workers = max(1, min(settings.translate_concurrency, len(chunks)))
     with ThreadPoolExecutor(max_workers=workers) as ex:
-        futs = {ex.submit(translate_batch, c): c for c in chunks}
+        futs = {ex.submit(translate_batch, c, target): c for c in chunks}
         for f in as_completed(futs):
             chunk = futs[f]
             try:
@@ -98,6 +101,7 @@ def translate() -> int:
                 a.title_no = t["title"]
                 a.summary_no = t["summary"]
                 a.content_no = t["content"] or None
+            a.translated_lang = plang
             a.translated_at = now
         s.commit()
 
@@ -106,9 +110,11 @@ def translate() -> int:
 
 
 def translate_pool_headlines() -> int:
-    """Foroversetter tittel+ingress for ferske saker som ikke alt har en norsk
-    tittel — så «flere saker»-lista er helnorsk og åpning rask. Brødtekst
-    oversettes først ved åpning (lat). Hopper over kilder på utelatt språk."""
+    """Foroversetter tittel+ingress for ferske saker som ikke alt har en
+    oversatt tittel — så «flere saker»-lista er på målspråket og åpning rask.
+    Brødtekst oversettes først ved åpning (lat). Hopper over utelatte språk."""
+    plang = runtime_config.paper_lang()
+    target = lang_prompt_name(plang)
     langs = _source_langs()
     with get_session() as s:
         arts = s.exec(
@@ -134,7 +140,7 @@ def translate_pool_headlines() -> int:
     results: dict[int, dict] = {}
     workers = max(1, min(settings.translate_concurrency, len(chunks)))
     with ThreadPoolExecutor(max_workers=workers) as ex:
-        futs = {ex.submit(translate_headlines_batch, c): c for c in chunks}
+        futs = {ex.submit(translate_headlines_batch, c, target): c for c in chunks}
         for f in as_completed(futs):
             try:
                 results.update(f.result())
@@ -153,6 +159,7 @@ def translate_pool_headlines() -> int:
                 continue
             a.title_no = res.get("title", t["title"])
             a.summary_no = res.get("summary", t["summary"])
+            a.translated_lang = plang
         s.commit()
 
     print(f"[translate] foroversatte {len(results)}/{total} titler i {len(chunks)} batch(er)")

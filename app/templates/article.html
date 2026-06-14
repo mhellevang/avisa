@@ -12,7 +12,7 @@
     {% if a.author %}<span>{{ a.author }}</span>{% endif %}
     {% if domain(a.url) %}<span>{{ domain(a.url) }}</span>{% endif %}
     <span>{{ no_datetime(a.published_at) if a.published_at else no_datetime(a.fetched_at) }}</span>
-    {% if read_min %}<span>{{ read_min }} min lesetid</span>{% endif %}
+    {% if read_min %}<span>{{ read_min }} {{ t("min lesetid") }}</span>{% endif %}
   </p>
   {% if a.image_url %}<img class="article-img" src="{{ a.image_url }}" alt="" loading="lazy" onerror="this.remove()">{% endif %}
 
@@ -20,7 +20,7 @@
 
   {% set bodytext = a.content_no or a.content %}
   {% if bodytext %}
-    {% if body_pending %}<p class="translating" id="translating-note">Oversetter brødteksten til norsk …</p>{% endif %}
+    {% if body_pending %}<p class="translating" id="translating-note">{{ t("Oversetter brødteksten til norsk …") }}</p>{% endif %}
     <div class="body-text" id="body-text"{% if body_pending %} data-translate-url="/article/{{ a.id }}/body"{% endif %}>
       {% for para in bodytext.split('\n') if para.strip() %}
       <p>{{ para }}</p>
@@ -40,7 +40,7 @@
             if (note) { note.remove(); }
           })
           .catch(function () {
-            if (note) { note.textContent = 'Kunne ikke oversette — viser originalteksten.'; }
+            if (note) { note.textContent = {{ t("Kunne ikke oversette — viser originalteksten.")|tojson }}; }
           });
       })();
     </script>
@@ -48,10 +48,10 @@
   {% endif %}
 
   <p class="source-link">
-    Les hele saken hos kilden: <a href="{{ a.url }}" target="_blank" rel="noopener">{{ domain(a.url) or a.url }}</a>
+    {{ t("Les hele saken hos kilden:") }} <a href="{{ a.url }}" target="_blank" rel="noopener">{{ domain(a.url) or a.url }}</a>
   </p>
   {% if a.title_no and a.title_no != a.title %}
-    <p class="orig-note">Oversatt fra original: «{{ a.title }}»</p>
+    <p class="orig-note">{{ t("Oversatt fra original:") }} «{{ a.title }}»</p>
   {% endif %}
 </article>
 
@@ -59,13 +59,13 @@
 <nav class="article-nav">
   {% if prev_item %}
   <a class="prev" href="/article/{{ prev_item.id }}">
-    <span class="nav-dir">← Forrige</span>
+    <span class="nav-dir">{{ t("← Forrige") }}</span>
     <span class="nav-title">{{ prev_item.title|truncate(60) }}</span>
   </a>
   {% else %}<span></span>{% endif %}
   {% if next_item %}
   <a class="next" href="/article/{{ next_item.id }}">
-    <span class="nav-dir">Neste →</span>
+    <span class="nav-dir">{{ t("Neste →") }}</span>
     <span class="nav-title">{{ next_item.title|truncate(60) }}</span>
   </a>
   {% endif %}

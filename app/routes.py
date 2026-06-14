@@ -9,7 +9,7 @@ from fastapi.templating import Jinja2Templates
 from markupsafe import escape
 from sqlmodel import select
 
-from . import auth, llm, progress, runtime_config, scheduler
+from . import auth, i18n, llm, progress, runtime_config, scheduler
 from .config import settings
 from .db import get_session
 from .fetchers import discover
@@ -54,6 +54,19 @@ templates.env.globals["no_datetime"] = no_datetime
 templates.env.globals["domain"] = domain
 # Callable så tittelen kan endres i drift (innstillinger/veiviser).
 templates.env.globals["paper_title"] = runtime_config.paper_title
+
+
+def _ui_lang() -> str:
+    return i18n.ui_lang(runtime_config.paper_lang())
+
+
+def t(key: str) -> str:
+    """UI-oversetting bundet til avisas gjeldende målspråk."""
+    return i18n.t(key, _ui_lang())
+
+
+templates.env.globals["t"] = t
+templates.env.globals["ui_lang"] = _ui_lang
 
 
 def _latest_edition_items(s):
@@ -146,20 +159,25 @@ def article(request: Request, article_id: int):
         if not a:
             return HTMLResponse("Fant ikke artikkelen", status_code=404)
 
-        # Skal saken oversettes? (Kildens språk ikke i skip-lista.)
+        # Skal saken oversettes til målspråket? (Ikke hvis den alt er på
+        # målspråket eller kildespråket står i «la stå urørt».)
         src = s.get(Source, a.source_id)
+        plang = runtime_config.paper_lang()
         do_translate = llm.enabled() and runtime_config.should_translate(src.lang if src else "")
 
         # Tittel+ingress oversettes inline hvis det mangler — kort tekst, går
         # fort. Brødteksten hentes IKKE-blokkerende via /article/{id}/body etter
         # at siden er vist, så åpningen aldri venter på en full-tekst-oversettelse.
         if do_translate and a.title_no is None:
-            res = llm.translate_to_norwegian(a.title, a.summary or "")
+            res = llm.translate_to_norwegian(
+                a.title, a.summary or "", target=i18n.lang_prompt_name(plang)
+            )
             if res:
                 a.title_no = res.get("title", a.title)
                 a.summary_no = res.get("summary", a.summary)
             else:
                 a.title_no, a.summary_no = a.title, a.summary
+            a.translated_lang = plang
             s.commit()
             s.refresh(a)
 
@@ -216,8 +234,12 @@ def article_body(article_id: int):
         src = s.get(Source, a.source_id)
         do_translate = llm.enabled() and runtime_config.should_translate(src.lang if src else "")
         if do_translate and a.content and a.content_no is None:
-            translated = llm.translate_body(a.display_title, a.content)
+            plang = runtime_config.paper_lang()
+            translated = llm.translate_body(
+                a.display_title, a.content, target=i18n.lang_prompt_name(plang)
+            )
             a.content_no = translated or a.content
+            a.translated_lang = plang
             if a.translated_at is None:
                 a.translated_at = utcnow()
             s.commit()
@@ -313,6 +335,15 @@ def feedback(background_tasks: BackgroundTasks, feedback: str = Form(...)):
 def settings_page(request: Request, saved: int = 0, msg: str = ""):
     with get_session() as s:
         sources = s.exec(select(Source).order_by(Source.id)).all()
+    plang = runtime_config.paper_lang()
+    skip = runtime_config.skip_langs()
+    # Avkrysningskandidater: språk som finnes blant kildene (≠ målspråket),
+    # pluss eventuelle skip-språk som ikke lenger har en kilde.
+    cand = {(src.lang or "").strip().lower() for src in sources}
+    cand |= skip
+    cand.discard("")
+    cand.discard(plang)
+    skip_options = sorted((c, i18n.lang_label(c)) for c in cand)
     return templates.TemplateResponse(
         "settings.html",
         {
@@ -322,7 +353,11 @@ def settings_page(request: Request, saved: int = 0, msg: str = ""):
             "preferences_val": runtime_config.preferences(),
             "front_page_size_val": runtime_config.front_page_size(),
             "poll_minutes_val": runtime_config.poll_minutes(),
-            "skip_langs_val": runtime_config.get("translate_skip_langs"),
+            "paper_lang_val": plang,
+            "ui_lang_options": [(c, i18n.lang_label(c)) for c in i18n.UI_LANGS],
+            "source_lang_options": [(c, i18n.lang_label(c)) for c in i18n.LANG_NAMES],
+            "skip_options": skip_options,
+            "skip_langs_set": skip,
             "provider_label": llm.provider_label(),
             "llm_enabled": llm.enabled(),
             "saved": bool(saved),
@@ -335,20 +370,43 @@ def settings_page(request: Request, saved: int = 0, msg: str = ""):
 
 @router.post("/settings")
 def settings_save(
+    background_tasks: BackgroundTasks,
     paper_title: str = Form(...),
     preferences: str = Form(...),
     front_page_size: int = Form(...),
     poll_minutes: int = Form(...),
-    skip_langs: str = Form(""),
+    paper_lang: str = Form("no"),
+    skip_langs: list[str] = Form(default=[]),
 ):
     runtime_config.set_value("paper_title", paper_title.strip())
     runtime_config.set_value("preferences", preferences.strip())
     runtime_config.set_value("front_page_size", str(max(1, front_page_size)))
     poll = max(1, poll_minutes)
     runtime_config.set_value("poll_minutes", str(poll))
-    # Normaliser til komma-separerte, små språkkoder.
-    langs = ",".join(p.strip().lower() for p in skip_langs.replace(" ", ",").split(",") if p.strip())
+    # Skip-språk kommer som avkryssede bokser; normaliser til komma-separert.
+    langs = ",".join(sorted({p.strip().lower() for p in skip_langs if p.strip()}))
     runtime_config.set_value("translate_skip_langs", langs)
+
+    # Bytte av målspråk: gammel oversettelses-cache er på feil språk. Nullstill
+    # den og bygg avisa på nytt så alt re-oversettes til det nye språket.
+    new_lang = (paper_lang or "no").strip().lower()
+    lang_changed = new_lang != runtime_config.paper_lang()
+    runtime_config.set_value("paper_lang", new_lang)
+    if lang_changed:
+        with get_session() as s:
+            stale = s.exec(
+                select(Article).where(
+                    Article.title_no != None,  # noqa: E711
+                    (Article.translated_lang == None) | (Article.translated_lang != new_lang),  # noqa: E711
+                )
+            ).all()
+            for a in stale:
+                a.title_no = a.summary_no = a.content_no = None
+                a.translated_lang = None
+                a.translated_at = None
+            s.commit()
+        background_tasks.add_task(run_pipeline)
+
     scheduler.reschedule(poll)
     return RedirectResponse(url="/settings?saved=1", status_code=303)
 
