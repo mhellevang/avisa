@@ -1,8 +1,8 @@
-"""Tynt lag mot OpenRouter for kuratering og oversettelse.
+"""Thin layer over OpenRouter for curation and translation.
 
-Designprinsipp: appen skal fungere ende-til-ende UTEN nøkkel. Da faller
-kuratering tilbake på nyeste saker, og oversettelse hopper over (originaltekst
-beholdes). Med nøkkel brukes LLM-en.
+Design principle: the app must work end-to-end WITHOUT a key. Then curation
+falls back to the latest stories and translation is skipped (the original text
+is kept). With a key, the LLM is used.
 """
 
 import json
@@ -12,6 +12,7 @@ from typing import Optional
 
 import httpx
 
+from . import i18n
 from .config import settings
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -27,8 +28,8 @@ def _claude_cli_available() -> bool:
 
 
 def active_provider() -> str:
-    """Løser opp 'auto' til en konkret provider. På localhost med en innlogget
-    Claude-session brukes claude-CLI når ingen OpenRouter-nøkkel er satt."""
+    """Resolves 'auto' to a concrete provider. On localhost with a logged-in
+    Claude session, the claude CLI is used when no OpenRouter key is set."""
     p = settings.llm_provider.lower()
     if p != "auto":
         return p
@@ -46,8 +47,8 @@ def enabled() -> bool:
 def provider_label() -> str:
     return {
         "openrouter": "OpenRouter",
-        "claude_cli": "lokal Claude-session",
-        "none": "ingen (demo-modus)",
+        "claude_cli": "local Claude session",
+        "none": "none (demo mode)",
     }.get(active_provider(), active_provider())
 
 
@@ -73,13 +74,13 @@ def _chat_openrouter(model: str, system: str, user: str, max_tokens: int) -> Opt
         resp.raise_for_status()
         return resp.json()["choices"][0]["message"]["content"]
     except Exception as e:
-        print(f"[llm] openrouter feilet ({model}): {e}")
+        print(f"[llm] openrouter failed ({model}): {e}")
         return None
 
 
 def _chat_claude_cli(system: str, user: str) -> Optional[str]:
-    """Kaller den lokale, innloggede claude-CLI-en. Prompten sendes på stdin
-    (tåler lange tekster); system-prompt via flagg."""
+    """Calls the local, logged-in claude CLI. The prompt is sent on stdin
+    (handles long texts); the system prompt via a flag."""
     cmd = ["claude", "-p", "--output-format", "text"]
     if system:
         cmd += ["--append-system-prompt", system]
@@ -90,11 +91,11 @@ def _chat_claude_cli(system: str, user: str) -> Optional[str]:
             cmd, input=user, capture_output=True, text=True, timeout=180
         )
         if proc.returncode != 0:
-            print(f"[llm] claude-cli feilet: {proc.stderr[:200]}")
+            print(f"[llm] claude-cli failed: {proc.stderr[:200]}")
             return None
         return proc.stdout.strip()
     except Exception as e:
-        print(f"[llm] claude-cli unntak: {e}")
+        print(f"[llm] claude-cli exception: {e}")
         return None
 
 
@@ -108,8 +109,8 @@ def _chat(model: str, system: str, user: str, max_tokens: int = 2000) -> Optiona
 
 
 def _extract_json(text: Optional[str]):
-    """Plukker ut JSON fra et LLM-svar, robust mot ```json-fences og prat
-    rundt."""
+    """Extracts JSON from an LLM reply, robust against ```json fences and
+    surrounding chatter."""
     if not text:
         return None
     t = text.strip()
@@ -118,13 +119,13 @@ def _extract_json(text: Optional[str]):
         if t.lstrip().lower().startswith("json"):
             t = t.lstrip()[4:]
         t = t.strip()
-    # 1) Vanligst: hele strengen er gyldig JSON.
+    # 1) Most common: the whole string is valid JSON.
     try:
         return json.loads(t)
     except json.JSONDecodeError:
         pass
-    # 2) Ellers: finn ytterste objekt/array. Velg den klammen som kommer FØRST,
-    #    så vi ikke plukker en indre array (f.eks. "actions": []) i et objekt.
+    # 2) Otherwise: find the outermost object/array. Pick the bracket that comes
+    #    FIRST, so we don't grab an inner array (e.g. "actions": []) in an object.
     pairs = [("{", "}"), ("[", "]")]
     pairs.sort(key=lambda p: (t.find(p[0]) if p[0] in t else len(t) + 1))
     for open_c, close_c in pairs:
@@ -139,12 +140,12 @@ def _extract_json(text: Optional[str]):
 
 
 # --------------------------------------------------------------------------- #
-# Kuratering
+# Curation
 # --------------------------------------------------------------------------- #
-def curate_articles(articles, preferences: str, n: int, target: str = "norsk bokmål") -> list[dict]:
-    """Returnerer liste av {id, score, section, reason} for de valgte sakene.
-    Seksjonsnavn og begrunnelse gis på målspråket `target`."""
-    # Sorter etter ferskhet og kapp til et fornuftig antall kandidater.
+def curate_articles(articles, preferences: str, n: int, target: str = "English") -> list[dict]:
+    """Returns a list of {id, score, section, reason} for the selected stories.
+    Section names and reasons are written in the target language `target`."""
+    # Sort by recency and cap to a sensible number of candidates.
     cands = sorted(
         articles,
         key=lambda a: a.published_at or a.fetched_at,
@@ -158,7 +159,7 @@ def curate_articles(articles, preferences: str, n: int, target: str = "norsk bok
                 "id": a.id,
                 "score": round(1.0 - i * 0.01, 3),
                 "section": a.section,
-                "reason": "Nyeste sak (ingen LLM-nøkkel satt)",
+                "reason": i18n.current("Latest story (no LLM key set)"),
             }
             for i, a in enumerate(top)
         ]
@@ -167,31 +168,29 @@ def curate_articles(articles, preferences: str, n: int, target: str = "norsk bok
         f"{a.id}\t[{a.section}] {a.title} — {(a.summary or '')[:180]}" for a in cands
     )
     system = (
-        "Du er en erfaren nyhetsredaktør som setter sammen en personlig "
-        "morgenavis for én leser. Du velger ut de viktigste og mest "
-        "relevante sakene, unngår duplikater, og sørger for en balansert "
-        "miks av seksjoner."
+        "You are an experienced news editor assembling a personal morning paper "
+        "for a single reader. You pick the most important and relevant stories, "
+        "avoid duplicates, and ensure a balanced mix of sections."
     )
     user = (
-        f"Leserens redaksjonelle profil:\n{preferences}\n\n"
-        f"Velg de {n} beste sakene fra kandidatlisten under. Ranger dem, gi "
-        f"hver en score mellom 0 og 1, plasser dem i en passende seksjon "
-        f"(f.eks. Innenriks, Utenriks, Teknologi, Vitenskap, Klima, Økonomi, "
-        f"Kultur), og gi en kort begrunnelse. Skriv seksjonsnavn og begrunnelse "
-        f"på {target}.\n\n"
-        f"Kandidater (id<TAB>tekst):\n{listing}\n\n"
-        f'Svar KUN med JSON på formen: '
+        f"The reader's editorial profile:\n{preferences}\n\n"
+        f"Pick the {n} best stories from the candidate list below. Rank them, "
+        f"give each a score between 0 and 1, place them in a suitable section "
+        f"(e.g. World, Domestic, Technology, Science, Climate, Economy, Culture), "
+        f"and give a short reason. Write section names and reasons in {target}.\n\n"
+        f"Candidates (id<TAB>text):\n{listing}\n\n"
+        f'Respond ONLY with JSON of the form: '
         f'[{{"id": <int>, "score": <0-1>, "section": "<str>", "reason": "<str>"}}]'
     )
     data = _extract_json(_chat(settings.curate_model, system, user, max_tokens=2500))
     if not isinstance(data, list):
-        # Fallback hvis LLM svarer rart
+        # Fallback if the LLM responds oddly.
         top = cands[:n]
         return [
-            {"id": a.id, "score": 0.5, "section": a.section, "reason": "Fallback"}
+            {"id": a.id, "score": 0.5, "section": a.section, "reason": i18n.current("Fallback selection")}
             for a in top
         ]
-    # Rens opp og kapp
+    # Clean up and cap.
     cleaned = []
     for r in data:
         if isinstance(r, dict) and "id" in r:
@@ -200,30 +199,30 @@ def curate_articles(articles, preferences: str, n: int, target: str = "norsk bok
 
 
 # --------------------------------------------------------------------------- #
-# Oversettelse til norsk
+# Translation
 # --------------------------------------------------------------------------- #
-def translate_to_norwegian(
-    title: str, summary: str, content: str = "", target: str = "norsk bokmål"
+def translate_fields(
+    title: str, summary: str, content: str = "", target: str = "English"
 ) -> Optional[dict]:
-    """Returnerer {title, summary, content} på målspråket, eller None hvis
-    ingen nøkkel / kallet feiler. Brødtekst kappes for å holde kostnaden nede."""
+    """Returns {title, summary, content} in the target language, or None if no
+    key / the call fails. The body is capped to keep the cost down."""
     if not enabled():
         return None
     body = (content or "")[: settings.translate_body_max_chars]
     system = (
-        f"Du er en profesjonell oversetter. Oversett til naturlig {target}. "
-        "Behold egennavn og avsnittsinndeling. Hvis teksten allerede er på "
-        f"{target}, returner den uendret. Ikke legg til kommentarer."
+        f"You are a professional translator. Translate to natural {target}. "
+        "Keep proper nouns and paragraph structure. If the text is already in "
+        f"{target}, return it unchanged. Do not add comments."
     )
     user = (
-        f"Oversett feltene under til {target}. Behold linjeskift i 'content'. "
-        "Svar KUN med JSON: "
-        '{"title": "<tittel>", "summary": "<ingress>", "content": "<brødtekst>"}\n\n'
+        f"Translate the fields below to {target}. Keep line breaks in 'content'. "
+        "Respond ONLY with JSON: "
+        '{"title": "<title>", "summary": "<lede>", "content": "<body>"}\n\n'
         f"title: {title}\n"
         f"summary: {summary}\n"
         f"content:\n{body}"
     )
-    # Mer tokens når vi også oversetter brødtekst.
+    # More tokens when we also translate the body.
     max_tokens = 6000 if body else 1200
     data = _extract_json(_chat(settings.translate_model, system, user, max_tokens=max_tokens))
     if isinstance(data, dict) and "title" in data:
@@ -231,10 +230,10 @@ def translate_to_norwegian(
     return None
 
 
-def translate_batch(items: list[dict], target: str = "norsk bokmål") -> dict[int, dict]:
-    """Oversetter flere artikler i ÉTT kall. items: [{id, title, summary, content}].
-    Returnerer {id: {title, summary, content}}. Amortiserer den dyre
-    claude-CLI-oppstarten over flere artikler. {} uten LLM eller ved feil."""
+def translate_batch(items: list[dict], target: str = "English") -> dict[int, dict]:
+    """Translates several articles in ONE call. items: [{id, title, summary, content}].
+    Returns {id: {title, summary, content}}. Amortizes the expensive claude-CLI
+    startup over several articles. {} without an LLM or on failure."""
     if not enabled() or not items:
         return {}
 
@@ -244,21 +243,21 @@ def translate_batch(items: list[dict], target: str = "norsk bokmål") -> dict[in
         body = (it.get("content") or "")[: settings.translate_body_max_chars]
         total_chars += len(body) + len(it.get("summary") or "") + len(it.get("title") or "")
         blocks.append(
-            f"=== ARTIKKEL {it['id']} ===\n"
-            f"TITTEL: {it.get('title', '')}\n"
-            f"INGRESS: {it.get('summary', '')}\n"
-            f"BRØDTEKST:\n{body}"
+            f"=== ARTICLE {it['id']} ===\n"
+            f"TITLE: {it.get('title', '')}\n"
+            f"LEDE: {it.get('summary', '')}\n"
+            f"BODY:\n{body}"
         )
     system = (
-        f"Du er en profesjonell oversetter. Oversett til naturlig {target}. "
-        f"Behold egennavn og avsnittsinndeling. Tekst som alt er på {target} "
-        "beholdes uendret."
+        f"You are a professional translator. Translate to natural {target}. "
+        f"Keep proper nouns and paragraph structure. Text already in {target} "
+        "is kept unchanged."
     )
     user = (
-        f"Oversett HVER artikkel under til {target}. Behold linjeskift i "
-        "brødteksten, og behold id-en for hver artikkel.\n"
-        'Svar KUN med en JSON-array: '
-        '[{"id": <int>, "title": "<tittel>", "summary": "<ingress>", "content": "<brødtekst>"}]\n\n'
+        f"Translate EACH article below to {target}. Keep line breaks in the "
+        "body, and keep the id for each article.\n"
+        'Respond ONLY with a JSON array: '
+        '[{"id": <int>, "title": "<title>", "summary": "<lede>", "content": "<body>"}]\n\n'
         + "\n\n".join(blocks)
     )
     max_tokens = min(8000, 1200 + int(total_chars * 0.6))
@@ -274,29 +273,29 @@ def translate_batch(items: list[dict], target: str = "norsk bokmål") -> dict[in
     return out
 
 
-def translate_headlines_batch(items: list[dict], target: str = "norsk bokmål") -> dict[int, dict]:
-    """Oversetter KUN tittel+ingress for flere artikler i ÉTT kall — billig
-    foroversetting for «flere saker»-lista. items: [{id, title, summary}].
-    Returnerer {id: {title, summary}}. {} uten LLM eller ved feil."""
+def translate_headlines_batch(items: list[dict], target: str = "English") -> dict[int, dict]:
+    """Translates ONLY title+lede for several articles in ONE call — cheap
+    pre-translation for the "more stories" list. items: [{id, title, summary}].
+    Returns {id: {title, summary}}. {} without an LLM or on failure."""
     if not enabled() or not items:
         return {}
 
     blocks = []
     for it in items:
         blocks.append(
-            f"=== ARTIKKEL {it['id']} ===\n"
-            f"TITTEL: {it.get('title', '')}\n"
-            f"INGRESS: {it.get('summary', '')}"
+            f"=== ARTICLE {it['id']} ===\n"
+            f"TITLE: {it.get('title', '')}\n"
+            f"LEDE: {it.get('summary', '')}"
         )
     system = (
-        f"Du er en profesjonell oversetter. Oversett til naturlig {target}. "
-        f"Behold egennavn. Tekst som alt er på {target} beholdes uendret."
+        f"You are a professional translator. Translate to natural {target}. "
+        f"Keep proper nouns. Text already in {target} is kept unchanged."
     )
     user = (
-        f"Oversett tittel og ingress for HVER artikkel under til {target}, "
-        "og behold id-en.\n"
-        'Svar KUN med en JSON-array: '
-        '[{"id": <int>, "title": "<tittel>", "summary": "<ingress>"}]\n\n'
+        f"Translate the title and lede of EACH article below to {target}, "
+        "and keep the id.\n"
+        'Respond ONLY with a JSON array: '
+        '[{"id": <int>, "title": "<title>", "summary": "<lede>"}]\n\n'
         + "\n\n".join(blocks)
     )
     max_tokens = min(4000, 600 + len(items) * 200)
@@ -312,23 +311,23 @@ def translate_headlines_batch(items: list[dict], target: str = "norsk bokmål") 
     return out
 
 
-def translate_body(title: str, content: str, target: str = "norsk bokmål") -> Optional[str]:
-    """Oversetter KUN brødteksten til målspråket (tittel som kontekst).
-    Returnerer teksten, eller None uten LLM / ved feil. Brukt ved åpning av
-    saker som ikke alt er foroversatt."""
+def translate_body(title: str, content: str, target: str = "English") -> Optional[str]:
+    """Translates ONLY the body to the target language (title as context).
+    Returns the text, or None without an LLM / on failure. Used when opening
+    stories that aren't pre-translated yet."""
     if not enabled() or not content:
         return None
     body = content[: settings.translate_body_max_chars]
     system = (
-        f"Du er en profesjonell oversetter. Oversett til naturlig {target}. "
-        f"Behold egennavn og avsnittsinndeling. Hvis teksten alt er på {target}, "
-        "returner den uendret. Ikke legg til kommentarer."
+        f"You are a professional translator. Translate to natural {target}. "
+        f"Keep proper nouns and paragraph structure. If the text is already in "
+        f"{target}, return it unchanged. Do not add comments."
     )
     user = (
-        f"Oversett brødteksten under til {target}. Behold linjeskift. "
-        'Svar KUN med JSON: {"content": "<brødtekst>"}\n\n'
-        f"TITTEL (kontekst): {title}\n"
-        f"BRØDTEKST:\n{body}"
+        f"Translate the body below to {target}. Keep line breaks. "
+        'Respond ONLY with JSON: {"content": "<body>"}\n\n'
+        f"TITLE (context): {title}\n"
+        f"BODY:\n{body}"
     )
     data = _extract_json(_chat(settings.translate_model, system, user, max_tokens=6000))
     if isinstance(data, dict) and isinstance(data.get("content"), str):
@@ -337,50 +336,50 @@ def translate_body(title: str, content: str, target: str = "norsk bokmål") -> O
 
 
 # --------------------------------------------------------------------------- #
-# Tilbakemelding → revidert redaksjonell profil
+# Feedback → revised editorial profile
 # --------------------------------------------------------------------------- #
-def revise_preferences(current: str, feedback: str) -> Optional[str]:
-    """Tar leserens frie tilbakemelding og dagens profil, og returnerer en
-    oppdatert profil (ren tekst). None hvis ingen LLM / feiler."""
+def revise_preferences(current: str, feedback: str, target: str = "English") -> Optional[str]:
+    """Takes the reader's free-text feedback and the current profile, and
+    returns an updated profile (plain text). None without an LLM / on failure."""
     if not enabled():
         return None
     system = (
-        "Du vedlikeholder en kort redaksjonell profil for en personlig avis. "
-        "Profilen styrer hvilke saker som velges. Innarbeid leserens "
-        "tilbakemelding i profilen — juster vekting, legg til eller fjern temaer "
-        "— og hold den konsis (noen få setninger). Behold det som fortsatt gjelder."
+        "You maintain a short editorial profile for a personal newspaper. The "
+        "profile drives which stories are selected. Incorporate the reader's "
+        "feedback into the profile — adjust weighting, add or remove topics — "
+        "and keep it concise (a few sentences). Keep what still applies."
     )
     user = (
-        f"Nåværende profil:\n{current}\n\n"
-        f"Leserens tilbakemelding:\n{feedback}\n\n"
-        "Returner KUN den oppdaterte profilen som ren tekst på norsk, uten "
-        "forklaring eller anførselstegn."
+        f"Current profile:\n{current}\n\n"
+        f"The reader's feedback:\n{feedback}\n\n"
+        f"Return ONLY the updated profile as plain text in {target}, without "
+        "explanation or quotation marks."
     )
     out = _chat(settings.curate_model, system, user, max_tokens=600)
     return out.strip() if out else None
 
 
 # --------------------------------------------------------------------------- #
-# Smart kilde-oppsett: velg beste feed + navngi + seksjoner
+# Smart source setup: pick the best feed + name + section
 # --------------------------------------------------------------------------- #
-def choose_source(site_url: str, title: str, feeds: list[dict]) -> Optional[dict]:
-    """Velger beste RSS-feed og foreslår navn + seksjon. None uten LLM."""
+def choose_source(site_url: str, title: str, feeds: list[dict], target: str = "English") -> Optional[dict]:
+    """Picks the best RSS feed and suggests a name + section. None without an LLM."""
     if not enabled():
         return None
     listing = "\n".join(
-        f'{i + 1}. {f["url"]}  (tittel: {f["title"] or "?"}, {f["entries"]} saker)'
+        f'{i + 1}. {f["url"]}  (title: {f["title"] or "?"}, {f["entries"]} stories)'
         for i, f in enumerate(feeds)
     )
-    system = "Du hjelper med å konfigurere en nyhetskilde for en personlig avis."
+    system = "You help configure a news source for a personal newspaper."
     user = (
-        f"Nettsted: {site_url}\n"
-        f"Sidetittel: {title}\n"
-        f"Fungerende RSS-feeder:\n{listing}\n\n"
-        "Velg den beste feeden for en generell nyhetsleser (helst hovedfeeden, "
-        "ikke en smal underkategori). Gi kilden et kort navn på norsk, og foreslå "
-        "én seksjon (Innenriks, Utenriks, Teknologi, Vitenskap, Klima, Økonomi, "
-        "Kultur, Sport eller Nyheter).\n"
-        'Svar KUN med JSON: {"url": "<feed-url>", "name": "<navn>", "section": "<seksjon>"}'
+        f"Website: {site_url}\n"
+        f"Page title: {title}\n"
+        f"Working RSS feeds:\n{listing}\n\n"
+        "Pick the best feed for a general news reader (preferably the main feed, "
+        f"not a narrow sub-category). Give the source a short name in {target}, "
+        "and suggest one section (World, Domestic, Technology, Science, Climate, "
+        "Economy, Culture, Sports or News).\n"
+        'Respond ONLY with JSON: {"url": "<feed-url>", "name": "<name>", "section": "<section>"}'
     )
     data = _extract_json(_chat(settings.curate_model, system, user, max_tokens=300))
     if isinstance(data, dict) and data.get("url"):
@@ -396,51 +395,54 @@ def interpret_config(
     front_page_size: int,
     poll_minutes: int,
     history: Optional[list] = None,
+    target: str = "English",
 ) -> Optional[dict]:
-    """Tolker en brukers frie konfig-melding til {reply, actions}. 'reply' er et
-    naturlig svar til brukeren; 'actions' er konkrete endringer. Svarer også på
-    spørsmål (da er actions tom). None uten LLM / hvis svaret ikke kan tolkes."""
+    """Interprets a user's free-text config message into {reply, actions}.
+    'reply' is a natural reply to the user in the target language `target`;
+    'actions' are concrete changes. Also answers questions (then actions is
+    empty). None without an LLM / if the reply can't be parsed."""
     if not enabled():
         return None
     src_list = "\n".join(
-        f'- "{s.name}" ({s.kind}, {"på" if s.enabled else "av"})' for s in sources
-    ) or "(ingen kilder ennå)"
+        f'- "{s.name}" ({s.kind}, {"on" if s.enabled else "off"})' for s in sources
+    ) or "(no sources yet)"
     transcript = ""
     for m in (history or [])[-6:]:
-        who = "Bruker" if m.get("role") == "user" else "Assistent"
+        who = "User" if m.get("role") == "user" else "Assistant"
         transcript += f"{who}: {m.get('text', '')}\n"
-    # Rammet som en datakonverterings-oppgave (ikke rollespill) — ellers kan
-    # claude-CLI-en avvise den som «prompt injection» mot Claude Code-personaen.
+    # Framed as a data-conversion task (not role-play) — otherwise the claude
+    # CLI may reject it as "prompt injection" against the Claude Code persona.
     system = (
-        "Du utfører en datakonverteringsoppgave for et nyhetsprogram. Du leser en "
-        "brukermelding og produserer ett JSON-objekt i nøyaktig angitt format."
+        "You perform a data-conversion task for a news program. You read a user "
+        "message and produce one JSON object in exactly the specified format."
     )
     user = (
-        "Konteksten under beskriver oppsettet til en personlig avis. Tolk den "
-        "siste brukermeldingen og produser ett JSON-objekt med et vennlig svar "
-        "på norsk ('reply') og hvilke endringer som skal gjøres ('actions').\n\n"
-        f"KILDER:\n{src_list}\n\n"
-        f"PROFIL: {preferences}\n"
-        f"TITTEL: {title} · FORSIDESTØRRELSE: {front_page_size} · "
+        "The context below describes the setup of a personal newspaper. Interpret "
+        f"the last user message and produce one JSON object with a friendly reply "
+        f"in {target} ('reply') and which changes to make ('actions').\n\n"
+        f"SOURCES:\n{src_list}\n\n"
+        f"PROFILE: {preferences}\n"
+        f"TITLE: {title} · FRONT_PAGE_SIZE: {front_page_size} · "
         f"POLL_MIN: {poll_minutes}\n\n"
-        + (f"SAMTALE SÅ LANGT:\n{transcript}\n" if transcript else "")
-        + f"SISTE BRUKERMELDING:\n{text}\n\n"
-        "Produser kun dette JSON-objektet, uten annen tekst:\n"
-        '{"reply": "<kort svar på norsk>", "actions": [<0 eller flere handlinger>]}\n\n'
-        "Gyldige handlinger (objekter i actions-arrayen):\n"
-        '{"action":"add_source","query":"<navn eller url, f.eks. nrk.no>"}\n'
-        '{"action":"remove_source","name":"<eksakt kildenavn fra KILDER>"}\n'
-        '{"action":"enable_source","name":"<kildenavn>"}\n'
-        '{"action":"disable_source","name":"<kildenavn>"}\n'
-        '{"action":"set_preferences","value":"<hele den nye profilen>"}\n'
-        '{"action":"set_title","value":"<tittel>"}\n'
-        '{"action":"set_front_page_size","value":<heltall>}\n'
-        '{"action":"set_poll_minutes","value":<heltall>}\n\n'
-        "Regler: Ved mer/mindre av temaer, bruk set_preferences med en oppdatert "
-        "profil som BEHOLDER det som fortsatt gjelder. Bruk eksakte kildenavn fra "
-        "KILDER. Er meldingen et spørsmål, svar i 'reply' og la 'actions' være []."
+        + (f"CONVERSATION SO FAR:\n{transcript}\n" if transcript else "")
+        + f"LAST USER MESSAGE:\n{text}\n\n"
+        "Produce only this JSON object, with no other text:\n"
+        f'{{"reply": "<short reply in {target}>", "actions": [<0 or more actions>]}}\n\n'
+        "Valid actions (objects in the actions array):\n"
+        '{"action":"add_source","query":"<name or url, e.g. nrk.no>"}\n'
+        '{"action":"remove_source","name":"<exact source name from SOURCES>"}\n'
+        '{"action":"enable_source","name":"<source name>"}\n'
+        '{"action":"disable_source","name":"<source name>"}\n'
+        '{"action":"set_preferences","value":"<the whole new profile>"}\n'
+        '{"action":"set_title","value":"<title>"}\n'
+        '{"action":"set_front_page_size","value":<integer>}\n'
+        '{"action":"set_poll_minutes","value":<integer>}\n\n'
+        "Rules: For more/less of topics, use set_preferences with an updated "
+        "profile that KEEPS what still applies. Use exact source names from "
+        "SOURCES. If the message is a question, answer in 'reply' and leave "
+        "'actions' as []."
     )
-    # Ett retry — CLI-en kan av og til avvike fra formatet.
+    # One retry — the CLI can occasionally deviate from the format.
     for _ in range(2):
         data = _extract_json(_chat(settings.curate_model, system, user, max_tokens=1000))
         if isinstance(data, dict) and "actions" in data:
@@ -450,9 +452,9 @@ def interpret_config(
     return None
 
 
-def suggest_selector(site_url: str, title: str, candidates: list[dict]) -> Optional[dict]:
-    """Foreslår en CSS-selector for artikkel-lenker på en feedløs side, basert
-    på en prøve av <a>-lenker (tekst + class). None uten LLM."""
+def suggest_selector(site_url: str, title: str, candidates: list[dict], target: str = "English") -> Optional[dict]:
+    """Suggests a CSS selector for article links on a feedless page, based on a
+    sample of <a> links (text + class). None without an LLM."""
     if not enabled():
         return None
     lines = []
@@ -464,17 +466,17 @@ def suggest_selector(site_url: str, title: str, candidates: list[dict]) -> Optio
         )
     listing = "\n".join(lines)
     system = (
-        "Du er ekspert på HTML/CSS og finner robuste selektorer for "
-        "artikkel-lenker på nyhetssider."
+        "You are an expert in HTML/CSS and find robust selectors for article "
+        "links on news sites."
     )
     user = (
-        f"Nettsted: {site_url}\nSidetittel: {title}\n\n"
-        f"Under er <a>-lenker fra forsiden med tekst og class-attributter:\n{listing}\n\n"
-        "Foreslå ÉN CSS-selector som treffer artikkel-/overskriftslenkene (ikke "
-        "meny, footer, annonser eller relaterte-lenker). Foretrekk class-baserte "
-        "selektorer som fanger flest mulig av sakene. Gi også et kort norsk navn "
-        "og en seksjon.\n"
-        'Svar KUN med JSON: {"link_selector": "<css>", "name": "<navn>", "section": "<seksjon>"}'
+        f"Website: {site_url}\nPage title: {title}\n\n"
+        f"Below are <a> links from the front page with text and class attributes:\n{listing}\n\n"
+        "Suggest ONE CSS selector that matches the article/headline links (not "
+        "menu, footer, ads or related links). Prefer class-based selectors that "
+        f"capture as many of the stories as possible. Also give a short name in "
+        f"{target} and a section.\n"
+        'Respond ONLY with JSON: {"link_selector": "<css>", "name": "<name>", "section": "<section>"}'
     )
     data = _extract_json(_chat(settings.curate_model, system, user, max_tokens=300))
     if isinstance(data, dict) and data.get("link_selector"):
@@ -482,19 +484,19 @@ def suggest_selector(site_url: str, title: str, candidates: list[dict]) -> Optio
     return None
 
 
-def suggest_feed_url(site_url: str, title: str) -> Optional[dict]:
-    """Når ingen feed ble funnet automatisk: spør LLM om en sannsynlig
-    RSS-feed-URL (mange er kjente, f.eks. BBC sin feeds.bbci.co.uk). Resultatet
-    valideres etterpå. None uten LLM."""
+def suggest_feed_url(site_url: str, title: str, target: str = "English") -> Optional[dict]:
+    """When no feed was found automatically: ask the LLM for a likely RSS feed
+    URL (many are well known, e.g. BBC's feeds.bbci.co.uk). The result is
+    validated afterwards. None without an LLM."""
     if not enabled():
         return None
-    system = "Du kjenner RSS-feedene til store nyhetsnettsteder."
+    system = "You know the RSS feeds of major news websites."
     user = (
-        f"Nettsted: {site_url}\nSidetittel: {title}\n\n"
-        "Oppgi den mest sannsynlige RSS-feed-URL-en for hovednyhetene på dette "
-        "nettstedet (full URL). Foreslå også et kort norsk navn og en seksjon. "
-        "Hvis du ikke kjenner en feed, sett url til tom streng.\n"
-        'Svar KUN med JSON: {"url": "<feed-url eller tom>", "name": "<navn>", "section": "<seksjon>"}'
+        f"Website: {site_url}\nPage title: {title}\n\n"
+        "Give the most likely RSS feed URL for the main news on this website "
+        f"(full URL). Also suggest a short name in {target} and a section. "
+        "If you don't know a feed, set url to an empty string.\n"
+        'Respond ONLY with JSON: {"url": "<feed-url or empty>", "name": "<name>", "section": "<section>"}'
     )
     data = _extract_json(_chat(settings.curate_model, system, user, max_tokens=300))
     if isinstance(data, dict) and data.get("url"):

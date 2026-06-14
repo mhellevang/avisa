@@ -21,25 +21,6 @@ router = APIRouter()
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
-_NO_MONTHS = [
-    "januar", "februar", "mars", "april", "mai", "juni",
-    "juli", "august", "september", "oktober", "november", "desember",
-]
-_NO_DAYS = ["mandag", "tirsdag", "onsdag", "torsdag", "fredag", "lørdag", "søndag"]
-
-
-def no_date(dt: datetime | None) -> str:
-    if not dt:
-        return ""
-    return f"{_NO_DAYS[dt.weekday()]} {dt.day}. {_NO_MONTHS[dt.month - 1]} {dt.year}"
-
-
-def no_datetime(dt: datetime | None) -> str:
-    if not dt:
-        return ""
-    return f"{dt.day}. {_NO_MONTHS[dt.month - 1]} kl. {dt.strftime('%H:%M')}"
-
-
 def domain(url: str) -> str:
     try:
         from urllib.parse import urlparse
@@ -49,22 +30,22 @@ def domain(url: str) -> str:
         return ""
 
 
-templates.env.globals["no_date"] = no_date
-templates.env.globals["no_datetime"] = no_datetime
-templates.env.globals["domain"] = domain
-# Callable så tittelen kan endres i drift (innstillinger/veiviser).
-templates.env.globals["paper_title"] = runtime_config.paper_title
-
-
 def _ui_lang() -> str:
     return i18n.ui_lang(runtime_config.paper_lang())
 
 
 def t(key: str) -> str:
-    """UI-oversetting bundet til avisas gjeldende målspråk."""
+    """UI translation bound to the paper's current target language."""
     return i18n.t(key, _ui_lang())
 
 
+# Date helpers localized to the paper's current UI language. Template names are
+# kept (no_date / no_datetime) so the markup doesn't need to change.
+templates.env.globals["no_date"] = lambda dt: i18n.fmt_date(dt, _ui_lang())
+templates.env.globals["no_datetime"] = lambda dt: i18n.fmt_datetime(dt, _ui_lang())
+templates.env.globals["domain"] = domain
+# Callable so the title can change at runtime (settings/wizard).
+templates.env.globals["paper_title"] = runtime_config.paper_title
 templates.env.globals["t"] = t
 templates.env.globals["ui_lang"] = _ui_lang
 
@@ -157,7 +138,7 @@ def article(request: Request, article_id: int):
     with get_session() as s:
         a = s.get(Article, article_id)
         if not a:
-            return HTMLResponse("Fant ikke artikkelen", status_code=404)
+            return HTMLResponse(i18n.current("Article not found"), status_code=404)
 
         # Skal saken oversettes til målspråket? (Ikke hvis den alt er på
         # målspråket eller kildespråket står i «la stå urørt».)
@@ -169,7 +150,7 @@ def article(request: Request, article_id: int):
         # fort. Brødteksten hentes IKKE-blokkerende via /article/{id}/body etter
         # at siden er vist, så åpningen aldri venter på en full-tekst-oversettelse.
         if do_translate and a.title_no is None:
-            res = llm.translate_to_norwegian(
+            res = llm.translate_fields(
                 a.title, a.summary or "", target=i18n.lang_prompt_name(plang)
             )
             if res:
@@ -317,7 +298,9 @@ def feedback(background_tasks: BackgroundTasks, feedback: str = Form(...)):
     feedback = feedback.strip()
     if feedback:
         current = runtime_config.preferences()
-        revised = llm.revise_preferences(current, feedback)
+        revised = llm.revise_preferences(
+            current, feedback, target=i18n.lang_prompt_name(runtime_config.paper_lang())
+        )
         if revised:
             runtime_config.set_value("preferences", revised)
         else:
@@ -439,10 +422,11 @@ def configure(background_tasks: BackgroundTasks, command: str = Form(...)):
     history = _load_chat()
     if not llm.enabled():
         history.append({"role": "user", "text": command})
-        history.append({"role": "bot", "text": "Jeg trenger en LLM for å forstå fritekst. Sett OPENROUTER_API_KEY, eller kjør lokalt med en innlogget claude-session."})
+        history.append({"role": "bot", "text": i18n.current("I need an LLM to understand free text. Set OPENROUTER_API_KEY, or run locally with a logged-in claude session.")})
         _save_chat(history)
         return RedirectResponse(url="/settings#chat", status_code=303)
 
+    plang = runtime_config.paper_lang()
     with get_session() as s:
         sources = s.exec(select(Source)).all()
     result = llm.interpret_config(
@@ -453,10 +437,11 @@ def configure(background_tasks: BackgroundTasks, command: str = Form(...)):
         runtime_config.front_page_size(),
         runtime_config.poll_minutes(),
         history=history,
+        target=i18n.lang_prompt_name(plang),
     )
     history.append({"role": "user", "text": command})
     if result is None:
-        history.append({"role": "bot", "text": "Beklager, jeg klarte ikke å tolke den. Prøv å være litt mer konkret?"})
+        history.append({"role": "bot", "text": i18n.current("Sorry, I couldn't interpret that. Try being a bit more specific?")})
         _save_chat(history)
         return RedirectResponse(url="/settings#chat", status_code=303)
 
@@ -477,10 +462,10 @@ def configure(background_tasks: BackgroundTasks, command: str = Form(...)):
                         section=prop["section"], enabled=True, config=prop.get("config"),
                     ))
                     s.commit()
-                done.append(f"la til «{prop['name']}»")
+                done.append(i18n.current("added «{name}»", name=prop["name"]))
                 rebuild = True
             else:
-                done.append(f"fant ikke kilde for «{act.get('query', '')}»")
+                done.append(i18n.current("couldn't find a source for «{query}»", query=act.get("query", "")))
         elif kind in ("remove_source", "enable_source", "disable_source"):
             name = (act.get("name") or "").strip().lower()
             with get_session() as s:
@@ -488,24 +473,25 @@ def configure(background_tasks: BackgroundTasks, command: str = Form(...)):
                     (x for x in s.exec(select(Source)).all() if x.name.lower() == name), None
                 )
                 if not match:
-                    done.append(f"fant ikke kilden «{act.get('name', '')}»")
+                    done.append(i18n.current("couldn't find the source «{name}»", name=act.get("name", "")))
                 elif kind == "remove_source":
                     s.delete(match); s.commit()
-                    done.append(f"fjernet «{match.name}»"); rebuild = True
+                    done.append(i18n.current("removed «{name}»", name=match.name)); rebuild = True
                 else:
                     match.enabled = (kind == "enable_source"); s.commit()
-                    done.append(f"{'skrudde på' if match.enabled else 'skrudde av'} «{match.name}»")
+                    key = "skrudde på «{name}»" if match.enabled else "skrudde av «{name}»"
+                    done.append(i18n.current(key, name=match.name))
                     rebuild = True
         elif kind == "set_preferences" and act.get("value"):
             runtime_config.set_value("preferences", str(act["value"]).strip())
-            done.append("oppdaterte profilen"); rebuild = True
+            done.append(i18n.current("updated the profile")); rebuild = True
         elif kind == "set_title" and act.get("value"):
             runtime_config.set_value("paper_title", str(act["value"]).strip())
-            done.append(f"satte tittel til «{act['value']}»")
+            done.append(i18n.current("set the title to «{value}»", value=act["value"]))
         elif kind == "set_front_page_size" and act.get("value"):
             try:
                 runtime_config.set_value("front_page_size", str(max(1, int(act["value"]))))
-                done.append(f"satte forsidestørrelse til {int(act['value'])}"); rebuild = True
+                done.append(i18n.current("set the front-page size to {value}", value=int(act["value"]))); rebuild = True
             except (TypeError, ValueError):
                 pass
         elif kind == "set_poll_minutes" and act.get("value"):
@@ -513,17 +499,17 @@ def configure(background_tasks: BackgroundTasks, command: str = Form(...)):
                 poll = max(1, int(act["value"]))
                 runtime_config.set_value("poll_minutes", str(poll))
                 scheduler.reschedule(poll)
-                done.append(f"satte poll-intervall til {poll} min")
+                done.append(i18n.current("set the poll interval to {value} min", value=poll))
             except (TypeError, ValueError):
                 pass
 
     # Bygg konfiguratorens svar: LLM-svaret + faktisk kvittering.
-    bot = reply or ("Gjort." if done else "Forsto meldingen, men fant ingenting å endre.")
+    bot = reply or (i18n.current("Done.") if done else i18n.current("Understood the message, but found nothing to change."))
     if done:
         bot += "\n\n✓ " + "; ".join(done) + "."
     if rebuild:
         background_tasks.add_task(run_pipeline)
-        bot += "\nBygger avisa på nytt …"
+        bot += "\n" + i18n.current("Rebuilding the paper …")
     history.append({"role": "bot", "text": bot})
     _save_chat(history)
     return RedirectResponse(url="/settings#chat", status_code=303)

@@ -5,7 +5,7 @@ from sqlmodel import select
 from .. import progress, runtime_config
 from ..config import settings
 from ..db import get_session
-from ..i18n import lang_prompt_name
+from ..i18n import current, lang_prompt_name
 from ..llm import curate_articles
 from ..models import Article, utcnow
 
@@ -22,7 +22,7 @@ def curate() -> int:
             print("[curate] ingen kandidater")
             return 0
 
-        progress.detail(f"Vurderer {len(candidates)} saker mot profilen …")
+        progress.detail(current("Assessing {n} stories against the profile …", n=len(candidates)))
 
         # Nullstill utvalg i vinduet før ny kuratering.
         for a in candidates:

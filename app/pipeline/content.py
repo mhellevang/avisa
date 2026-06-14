@@ -13,6 +13,7 @@ from sqlmodel import select
 from .. import progress
 from ..config import settings
 from ..db import get_session
+from ..i18n import current
 from ..fetchers.browser import BrowserSession, playwright_available
 from ..fetchers.content import extract_rendered, extract_static
 from ..models import Article, utcnow
@@ -41,7 +42,7 @@ def _run_fetch(targets: list[tuple[int, str]]) -> int:
             if res:
                 results[aid] = res
             done += 1
-            progress.detail(f"Henter fulltekst {done}/{total}")
+            progress.detail(current("Fetching full text {done}/{total}", done=done, total=total))
 
     # 2) Playwright-fallback for de som ikke fikk brødtekst statisk
     misses = [
@@ -51,7 +52,7 @@ def _run_fetch(targets: list[tuple[int, str]]) -> int:
         try:
             with BrowserSession() as bs:
                 for i, (aid, url) in enumerate(misses, 1):
-                    progress.detail(f"Renderer JS-side {i}/{len(misses)} …")
+                    progress.detail(current("Rendering JS page {i}/{total} …", i=i, total=len(misses)))
                     res = extract_rendered(bs, url)
                     if res:
                         # Behold evt. bilde fra statisk pass om rendret mangler.
@@ -103,7 +104,7 @@ def fetch_new_content(limit: int | None = None) -> int:
     if total > len(batch):
         print(f"[content] {total - len(batch)} saker utsatt til neste kjør (cap {limit})")
     if batch:
-        progress.detail(f"0/{len(batch)} saker")
+        progress.detail(current("0/{total} stories", total=len(batch)))
     return _run_fetch(batch)
 
 

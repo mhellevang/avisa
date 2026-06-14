@@ -93,17 +93,18 @@ def discover_feeds(site_url: str) -> tuple[str | None, list[dict]]:
 def detect_playwright_source(site: str, title: str) -> dict | None:
     """Feedløs side: render med Playwright, la LLM foreslå en link-selector, og
     valider den ved å faktisk kjøre den. Krever Playwright + LLM."""
-    from .. import llm
+    from .. import i18n, llm, runtime_config
     from .browser import BrowserSession, playwright_available
 
     if not (playwright_available() and llm.enabled()):
         return None
+    target = i18n.lang_prompt_name(runtime_config.paper_lang())
     try:
         with BrowserSession() as bs:
             candidates = bs.link_candidates(site)
             if not candidates:
                 return None
-            sug = llm.suggest_selector(site, title, candidates)
+            sug = llm.suggest_selector(site, title, candidates, target=target)
             if not sug or not sug.get("link_selector"):
                 return None
             selector = sug["link_selector"]
@@ -137,11 +138,12 @@ def propose(user_input: str) -> dict:
     html, feeds = discover_feeds(site)
     title = _page_title(html)
 
-    from .. import llm
+    from .. import i18n, llm, runtime_config
 
+    target = i18n.lang_prompt_name(runtime_config.paper_lang())
     # Fant vi ingen feed automatisk? Be LLM gjette en kjent feed-URL og valider.
     if not feeds:
-        guess = llm.suggest_feed_url(site, title)
+        guess = llm.suggest_feed_url(site, title, target=target)
         if guess and guess.get("url"):
             res = _validate_feed(guess["url"])
             if res:
@@ -166,7 +168,7 @@ def propose(user_input: str) -> dict:
         }
 
     # La LLM velge beste feed + navn + seksjon hvis tilgjengelig.
-    choice = llm.choose_source(site, title, feeds)
+    choice = llm.choose_source(site, title, feeds, target=target)
     if choice and choice.get("url"):
         url = choice["url"]
         name = choice.get("name") or title or urlparse(site).netloc

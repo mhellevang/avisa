@@ -21,11 +21,13 @@ _state: dict = {
 
 
 def begin() -> None:
+    from . import i18n  # lazy: unngår import-syklus
+
     with _lock:
         _state.update(
             running=True,
             stage="start",
-            message="Starter …",
+            message=i18n.current("Starting …"),
             detail="",
             step=0,
             steps=0,

@@ -5,20 +5,20 @@
     <span class="edition-date">{{ no_date(edition.built_at) if edition else "" }}</span>
     <span class="masthead-actions">
       {% if auth_enabled and not is_admin %}
-        <a href="/login" class="settings-link">{{ t("Logg inn") }}</a>
+        <a href="/login" class="settings-link">{{ t("Log in") }}</a>
       {% else %}
-        <a href="/settings" class="settings-link">{{ t("⚙ Innstillinger") }}</a>
+        <a href="/settings" class="settings-link">{{ t("⚙ Settings") }}</a>
         <form action="/refresh" method="post" class="refresh-form">
-          <button type="submit" title="{{ t('Hent nytt innhold nå') }}">{{ t("↻ Oppdater") }}</button>
+          <button type="submit" title="{{ t('Fetch new content now') }}">{{ t("↻ Refresh") }}</button>
         </form>
-        {% if auth_enabled %}<form action="/logout" method="post" class="refresh-form"><button type="submit">{{ t("Logg ut") }}</button></form>{% endif %}
+        {% if auth_enabled %}<form action="/logout" method="post" class="refresh-form"><button type="submit">{{ t("Log out") }}</button></form>{% endif %}
       {% endif %}
     </span>
   </div>
   <h1 class="nameplate">{{ paper_title() }}</h1>
   <div class="masthead-rule">
-    {% if edition %}{{ t("Oppdatert") }} {{ no_datetime(edition.built_at) }}{% else %}{{ t("Bygger første utgave …") }}{% endif %}
-    {% if not llm_enabled %}<span class="badge">{{ t("demo-modus: ingen LLM — råkuratert, uoversatt") }}</span>{% else %}<span class="badge ok">{{ provider_label }}</span>{% endif %}
+    {% if edition %}{{ t("Updated") }} {{ no_datetime(edition.built_at) }}{% else %}{{ t("Building the first edition …") }}{% endif %}
+    {% if not llm_enabled %}<span class="badge">{{ t("demo mode: no LLM — raw curation, untranslated") }}</span>{% else %}<span class="badge ok">{{ provider_label }}</span>{% endif %}
   </div>
 </header>
 
@@ -26,7 +26,7 @@
 <div id="status-strip" class="status-strip" hidden>
   <div class="status-line">
     <span class="spinner"></span>
-    <span id="status-msg">{{ t("Forbereder …") }}</span>
+    <span id="status-msg">{{ t("Preparing …") }}</span>
     <span id="status-elapsed" class="status-elapsed"></span>
   </div>
   <span class="progress-bar"><span id="status-fill" class="progress-fill"></span></span>
@@ -35,16 +35,16 @@
 {% if not edition %}
   <section id="building" class="building">
     <div class="spinner big"></div>
-    <h3 id="building-msg">{{ t("Bygger din første utgave …") }}</h3>
+    <h3 id="building-msg">{{ t("Building your first edition …") }}</h3>
     <span class="progress-bar"><span id="building-fill" class="progress-fill"></span></span>
-    <p id="building-detail" class="building-detail">{{ t("Setter i gang …") }}</p>
-    <p class="building-hint">{{ t("Dette gjøres i bakgrunnen — siden oppdaterer seg selv når avisa er klar.") }}</p>
+    <p id="building-detail" class="building-detail">{{ t("Getting started …") }}</p>
+    <p class="building-hint">{{ t("This runs in the background — the page refreshes itself when the paper is ready.") }}</p>
   </section>
 {% else %}
 
 {% if sections %}
 <nav class="sections-nav">
-  <a href="#topp">{{ t("Toppsaker") }}</a>
+  <a href="#topp">{{ t("Top stories") }}</a>
   {% for section in sections.keys() %}
   <a href="#sek{{ loop.index }}">{{ section }}</a>
   {% endfor %}
@@ -98,15 +98,15 @@
 {% endif %}
 
 <div class="more-link">
-  <a href="/more">{{ t("Flere saker →") }}</a>
+  <a href="/more">{{ t("More stories →") }}</a>
 </div>
 
 {% if is_admin %}
 <section class="feedback">
-  <h4>{{ t("Til redaktøren") }}</h4>
-  <p class="feedback-hint">{{ t("Skriv hva du vil ha mer eller mindre av — f.eks. «mer klima og vitenskap, færre meningsinnlegg». Profilen justeres og avisa bygges på nytt.") }}</p>
+  <h4>{{ t("To the editor") }}</h4>
+  <p class="feedback-hint">{{ t("Tell us what you'd like more or less of — e.g. «more climate and science, fewer opinion pieces». The profile is adjusted and the paper rebuilt.") }}</p>
   <form action="/feedback" method="post">
-    <input type="text" name="feedback" placeholder="{{ t('Din tilbakemelding …') }}" required>
+    <input type="text" name="feedback" placeholder="{{ t('Your feedback …') }}" required>
     <button type="submit">{{ t("Send") }}</button>
   </form>
 </section>
@@ -124,11 +124,11 @@
   const bFill = building && document.getElementById('building-fill');
   const current = {{ edition.id if edition else 'null' }};
   const T = {
-    step: {{ t("Steg")|tojson }},
-    left: {{ t("s igjen")|tojson }},
-    almost: {{ t("snart ferdig …")|tojson }},
-    ready: {{ t("Ny utgave klar")|tojson }},
-    view: {{ t("Vis →")|tojson }},
+    step: {{ t("Step")|tojson }},
+    left: {{ t("s left")|tojson }},
+    almost: {{ t("almost done …")|tojson }},
+    ready: {{ t("New edition ready")|tojson }},
+    view: {{ t("View →")|tojson }},
   };
   const secs = v => (v ? Math.round(v) + ' s' : '');
 

@@ -5,7 +5,7 @@ from sqlmodel import select
 from .. import progress, runtime_config
 from ..config import settings
 from ..db import get_session
-from ..i18n import lang_prompt_name
+from ..i18n import current, lang_prompt_name
 from ..llm import translate_batch, translate_headlines_batch
 from ..models import Article, Source, utcnow
 
@@ -68,7 +68,7 @@ def translate() -> int:
         print("[translate] ingen nye å oversette")
         return 0
 
-    progress.detail(f"0/{total} saker")
+    progress.detail(current("0/{total} stories", total=total))
     chunks = _chunk(targets)
     results: dict[int, dict] = {}
     done = 0
@@ -82,7 +82,7 @@ def translate() -> int:
             except Exception as e:
                 print(f"[translate] batch feilet: {e}")
             done += len(chunk)
-            progress.detail(f"Oversetter {min(done, total)}/{total}")
+            progress.detail(current("Translating {done}/{total}", done=min(done, total), total=total))
 
     now = utcnow()
     with get_session() as s:

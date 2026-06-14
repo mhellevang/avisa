@@ -1,17 +1,17 @@
 {% extends "base.html" %}
-{% block title %}{{ t("Innstillinger") }} — {{ paper_title() }}{% endblock %}
+{% block title %}{{ t("Settings") }} — {{ paper_title() }}{% endblock %}
 {% block body %}
 <header class="article-head">
   <a class="back" href="/">← {{ paper_title() }}</a>
-  <h2 class="more-title">{{ t("Innstillinger") }}</h2>
-  {% if auth_enabled %}<form action="/logout" method="post" class="refresh-form" style="margin-top:6px"><button type="submit">{{ t("Logg ut") }}</button></form>{% endif %}
+  <h2 class="more-title">{{ t("Settings") }}</h2>
+  {% if auth_enabled %}<form action="/logout" method="post" class="refresh-form" style="margin-top:6px"><button type="submit">{{ t("Log out") }}</button></form>{% endif %}
 </header>
 
-{% if saved %}<p class="saved-note">{{ t("✓ Lagret.") }}</p>{% endif %}
+{% if saved %}<p class="saved-note">{{ t("✓ Saved.") }}</p>{% endif %}
 {% if msg %}<p class="saved-note">{{ msg }}</p>{% endif %}
 
 <section class="settings-block configurator" id="chat">
-  <h3>{{ t("💬 Snakk med konfiguratoren") }}</h3>
+  <h3>{{ t("💬 Talk to the configurator") }}</h3>
   {% if llm_enabled %}
   {% if chat %}
   <div class="chat-log">
@@ -19,12 +19,12 @@
     <div class="bubble {{ 'me' if m.role == 'user' else 'bot' }}">{{ m.text }}</div>
     {% endfor %}
   </div>
-  <form action="/configure/clear" method="post" class="clear-chat"><button type="submit">{{ t("Tøm samtale") }}</button></form>
+  <form action="/configure/clear" method="post" class="clear-chat"><button type="submit">{{ t("Clear conversation") }}</button></form>
   {% else %}
-  <p class="settings-hint">{{ t("Skriv med egne ord hva du vil endre — eller spør om oppsettet. Den svarer og utfører.") }}</p>
+  <p class="settings-hint">{{ t("Describe in your own words what you want to change — or ask about the setup. It replies and acts.") }}</p>
   {% endif %}
   <form action="/configure" method="post" class="settings-form" id="chat-form">
-    <textarea name="command" id="chat-input" rows="2" placeholder="f.eks. «Legg til aftenposten.no, fjern Hacker News, og mer om klima» — eller «hvilke kilder har jeg?» (Enter for å sende, Shift+Enter for ny linje)" required></textarea>
+    <textarea name="command" id="chat-input" rows="2" placeholder="{{ t('e.g. «Add aftenposten.no, remove Hacker News, and more on climate» — or «what sources do I have?» (Enter to send, Shift+Enter for a new line)') }}" required></textarea>
     <button type="submit">{{ t("Send") }}</button>
   </form>
   <script>
@@ -42,58 +42,57 @@
   </script>
   {% if not chat %}
   <p class="settings-hint examples">
-    Prøv: «legg til nrk.no» · «fjern The Guardian» · «mer teknologi, mindre kjendis» ·
-    «kall avisa Kveldsposten» · «hvilke kilder har jeg?»
+    {{ t("Try: «add nrk.no» · «remove The Guardian» · «more tech, less celebrity» · «call the paper Evening Post» · «what sources do I have?»") }}
   </p>
   {% endif %}
   {% else %}
-  <p class="settings-hint">{{ t("Krever en LLM. Sett") }} <code>OPENROUTER_API_KEY</code>, {{ t("eller kjør lokalt med en innlogget") }} <code>claude</code>{{ t("-session, så kan du styre alt med fritekst her.") }}</p>
+  <p class="settings-hint">{{ t("Requires an LLM. Set") }} <code>OPENROUTER_API_KEY</code>, {{ t("or run locally with a logged-in") }} <code>claude</code>{{ t("session, then you can control everything with free text here.") }}</p>
   {% endif %}
 </section>
 
 <section class="settings-block">
-  <h3>{{ t("Avis & profil") }}</h3>
+  <h3>{{ t("Paper & profile") }}</h3>
   <p class="settings-hint">{{ t("LLM:") }} <strong>{{ provider_label }}</strong></p>
   <form action="/settings" method="post" class="settings-form">
-    <label>{{ t("Tittel") }}
+    <label>{{ t("Title") }}
       <input type="text" name="paper_title" value="{{ paper_title_val }}" required>
     </label>
-    <label>{{ t("Redaksjonell profil (styrer kurateringen)") }}
+    <label>{{ t("Editorial profile (drives curation)") }}
       <textarea name="preferences" rows="5" required>{{ preferences_val }}</textarea>
     </label>
     <div class="settings-row">
-      <label>{{ t("Saker på forsiden") }}
+      <label>{{ t("Front-page stories") }}
         <input type="number" name="front_page_size" min="1" max="60" value="{{ front_page_size_val }}">
       </label>
-      <label>{{ t("Poll-intervall (minutter)") }}
+      <label>{{ t("Poll interval (minutes)") }}
         <input type="number" name="poll_minutes" min="1" max="1440" value="{{ poll_minutes_val }}">
       </label>
     </div>
-    <label>{{ t("Avisas språk") }}
+    <label>{{ t("Paper language") }}
       <select name="paper_lang">
         {% for code, label in ui_lang_options %}
         <option value="{{ code }}"{% if code == paper_lang_val %} selected{% endif %}>{{ label }}</option>
         {% endfor %}
       </select>
-      <span class="settings-hint">{{ t("Innhold oversettes til dette språket, og grensesnittet vises på det (om lokalisert).") }}</span>
+      <span class="settings-hint">{{ t("Content is translated to this language, and the interface is shown in it (where localized).") }}</span>
     </label>
     {% if skip_options %}
     <fieldset class="lang-skip">
-      <legend>{{ t("La stå urørt (ikke oversett disse kildespråkene)") }}</legend>
+      <legend>{{ t("Leave untouched (don't translate these source languages)") }}</legend>
       {% for code, label in skip_options %}
       <label class="check"><input type="checkbox" name="skip_langs" value="{{ code }}"{% if code in skip_langs_set %} checked{% endif %}> {{ label }}</label>
       {% endfor %}
-      <span class="settings-hint">{{ t("Saker fra disse kildespråkene vises på originalspråk selv om de avviker fra avisas språk.") }}</span>
+      <span class="settings-hint">{{ t("Stories from these source languages are shown in the original even if they differ from the paper language.") }}</span>
     </fieldset>
     {% endif %}
-    <button type="submit">{{ t("Lagre") }}</button>
+    <button type="submit">{{ t("Save") }}</button>
   </form>
 </section>
 
 <section class="settings-block">
-  <h3>{{ t("Kilder") }}</h3>
+  <h3>{{ t("Sources") }}</h3>
   <table class="sources-table">
-    <thead><tr><th>{{ t("Navn") }}</th><th>{{ t("Type") }}</th><th>{{ t("Seksjon") }}</th><th>{{ t("Språk") }}</th><th>{{ t("Status") }}</th><th></th></tr></thead>
+    <thead><tr><th>{{ t("Name") }}</th><th>{{ t("Type") }}</th><th>{{ t("Section") }}</th><th>{{ t("Language") }}</th><th>{{ t("Status") }}</th><th></th></tr></thead>
     <tbody>
       {% for src in sources %}
       <tr class="{{ 'src-off' if not src.enabled }}">
@@ -109,31 +108,31 @@
             </select>
           </form>
         </td>
-        <td>{{ t("På") if src.enabled else t("Av") }}</td>
+        <td>{{ t("On") if src.enabled else t("Off") }}</td>
         <td class="src-actions">
-          <form action="/sources/{{ src.id }}/toggle" method="post"><button type="submit">{{ t("Skru av") if src.enabled else t("Skru på") }}</button></form>
-          <form action="/sources/{{ src.id }}/delete" method="post" onsubmit="return confirm('{{ src.name }}?')"><button type="submit" class="danger">{{ t("Slett") }}</button></form>
+          <form action="/sources/{{ src.id }}/toggle" method="post"><button type="submit">{{ t("Turn off") if src.enabled else t("Turn on") }}</button></form>
+          <form action="/sources/{{ src.id }}/delete" method="post" onsubmit="return confirm('{{ src.name }}?')"><button type="submit" class="danger">{{ t("Delete") }}</button></form>
         </td>
       </tr>
       {% else %}
-      <tr><td colspan="6" class="empty">{{ t("Ingen kilder ennå.") }}</td></tr>
+      <tr><td colspan="6" class="empty">{{ t("No sources yet.") }}</td></tr>
       {% endfor %}
     </tbody>
   </table>
 
-  <h4>{{ t("Legg til kilde — bare lim inn en URL eller et navn") }}</h4>
+  <h4>{{ t("Add a source — just paste a URL or a name") }}</h4>
   <form action="/sources/discover" method="post" class="settings-form smart-add">
     <div class="settings-row">
-      <input type="text" name="query" placeholder="f.eks. nrk.no eller https://www.aftenposten.no" required>
-      <button type="submit">{{ t("Finn ut av det") }}</button>
+      <input type="text" name="query" placeholder="{{ t('e.g. nrk.no or https://www.aftenposten.no') }}" required>
+      <button type="submit">{{ t("Figure it out") }}</button>
     </div>
-    <p class="settings-hint">Vi finner RSS-feeden automatisk{% if llm_enabled %} og lar Claude navngi og seksjonere den{% endif %}.</p>
+    <p class="settings-hint">{{ t("We find the RSS feed automatically") }}{% if llm_enabled %}{{ t(" and let Claude name and categorize it.") }}{% else %}.{% endif %}</p>
   </form>
 
   <details class="advanced">
-    <summary>{{ t("Avansert: legg til manuelt") }}</summary>
+    <summary>{{ t("Advanced: add manually") }}</summary>
     <form action="/sources/add" method="post" class="settings-form">
-      <label>{{ t("Navn") }} <input type="text" name="name" required></label>
+      <label>{{ t("Name") }} <input type="text" name="name" required></label>
       <div class="settings-row">
         <label>{{ t("Type") }}
           <select name="kind">
@@ -142,8 +141,8 @@
             <option value="playwright">playwright</option>
           </select>
         </label>
-        <label>{{ t("Seksjon") }} <input type="text" name="section" value="Nyheter"></label>
-        <label>{{ t("Språk") }}
+        <label>{{ t("Section") }} <input type="text" name="section" value="Nyheter"></label>
+        <label>{{ t("Language") }}
           <select name="lang">
             {% for code, label in source_lang_options %}
             <option value="{{ code }}"{% if code == 'en' %} selected{% endif %}>{{ code }}</option>
@@ -152,10 +151,10 @@
         </label>
       </div>
       <label>{{ t("URL") }} <input type="url" name="url" required></label>
-      <label>Config (JSON, valgfritt — f.eks. <code>{"link_selector": "a.article"}</code> for playwright)
+      <label>{{ t("Config (JSON, optional)") }} — f.eks. <code>{"link_selector": "a.article"}</code> {{ t("for playwright") }}
         <input type="text" name="config" placeholder="{}">
       </label>
-      <button type="submit">{{ t("Legg til") }}</button>
+      <button type="submit">{{ t("Add") }}</button>
     </form>
   </details>
 </section>
