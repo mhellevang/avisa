@@ -248,6 +248,10 @@ def article(request: Request, article_id: int):
         words = len(text.split())
         read_min = max(1, round(words / 200)) if words else None
 
+        # Source name for provenance: aggregators (Hacker News) link out to other
+        # domains, so the byline domain alone (e.g. github.com) is misleading.
+        source_name = src.name if src else ""
+
     return templates.TemplateResponse(
         "article.html",
         {
@@ -257,6 +261,7 @@ def article(request: Request, article_id: int):
             "next_item": next_item,
             "read_min": read_min,
             "body_pending": body_pending,
+            "source_name": source_name,
         },
     )
 
