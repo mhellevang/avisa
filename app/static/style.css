@@ -625,3 +625,32 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
   cursor: pointer;
 }
 .theme-toggle:hover { color: var(--paper); background: var(--ink); }
+
+/* ---------- Diskret «nyere utgave»-indikator ---------- */
+.edition-age { color: var(--ink-soft); }
+.newer-banner {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 12px 0 0;
+  padding: 8px 13px;
+  font-family: var(--serif);
+  font-size: 0.8rem;
+  letter-spacing: 0.03em;
+  color: var(--ink-soft);
+  background: var(--paper-shade);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+}
+.newer-banner:hover { color: var(--ink); }
+.newer-banner[hidden] { display: none; }
+.newer-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex: none;
+  animation: newer-pulse 2.4s ease-in-out infinite;
+}
+@keyframes newer-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+.newer-refresh { text-decoration: underline; text-underline-offset: 2px; }

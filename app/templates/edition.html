@@ -17,10 +17,16 @@
   </div>
   <h1 class="nameplate">{{ paper_title() }}</h1>
   <div class="masthead-rule">
-    {% if edition %}{{ t("Updated") }} {{ no_datetime(edition.built_at) }}{% else %}{{ t("Building the first edition …") }}{% endif %}
+    {% if edition %}{{ t("Updated") }} {{ no_datetime(edition.built_at) }} <span class="edition-age" data-built="{{ edition.built_at.isoformat() }}"></span>{% else %}{{ t("Building the first edition …") }}{% endif %}
     {% if not llm_enabled %}<span class="badge">{{ t("demo mode: no LLM — raw curation, untranslated") }}</span>{% else %}<span class="badge ok">{{ provider_label }}</span>{% endif %}
   </div>
 </header>
+
+<!-- Diskret indikator: vises av JS når en nyere utgave finnes. Du oppdaterer selv. -->
+<a id="newer-banner" class="newer-banner" href="/" hidden>
+  <span class="newer-dot"></span>
+  <span>{{ t("Newer edition available — refresh when you're ready") }}</span>
+</a>
 
 <!-- Live fremdriftsstripe (vises av JS når pipelinen kjører) -->
 <div id="status-strip" class="status-strip" hidden>
@@ -166,12 +172,12 @@
       } else {
         if (building && d.has_edition) { location.reload(); return; }
         if (current !== null && d.edition_id && d.edition_id !== current) {
-          strip.hidden = false;
-          strip.classList.add('done');
-          fill.style.width = '100%';
-          msgEl.textContent = T.ready;
-          elEl.innerHTML = '<a href="/">' + T.view + '</a>';
-          again = false; // terminal: slutt å polle
+          // Nyere utgave finnes: vis en diskret indikator og slutt å polle.
+          // Brukeren oppdaterer selv når hen vil — som en vanlig nettavis.
+          const banner = document.getElementById('newer-banner');
+          if (banner) banner.hidden = false;
+          strip.hidden = true;
+          again = false; // terminal: vi vet at det finnes nytt
         } else {
           strip.hidden = true;
         }
@@ -180,6 +186,29 @@
     if (again) setTimeout(tick, 1500);
   }
   tick();
+})();
+
+// Relativ alder på gjeldende utgave («· for 2 t siden»), så det synes når
+// innholdet begynner å bli gammelt. Auto-lokalisert via Intl.
+(function () {
+  const el = document.querySelector('.edition-age');
+  if (!el || !el.dataset.built) return;
+  // built_at er naiv UTC fra backend — tolk som UTC.
+  const built = new Date(el.dataset.built + 'Z');
+  if (isNaN(built)) return;
+  const lang = document.documentElement.lang || 'en';
+  let rtf;
+  try { rtf = new Intl.RelativeTimeFormat(lang, { numeric: 'auto' }); }
+  catch (e) { return; }
+  function update() {
+    const mins = Math.round((Date.now() - built.getTime()) / 60000);
+    if (mins < 1) { el.textContent = ''; return; }
+    el.textContent = '· ' + (mins < 60
+      ? rtf.format(-mins, 'minute')
+      : rtf.format(-Math.round(mins / 60), 'hour'));
+  }
+  update();
+  setInterval(update, 60000);
 })();
 </script>
 {% endblock %}

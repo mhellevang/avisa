@@ -62,6 +62,9 @@ CATALOG: dict[str, dict[str, str]] = {
         "almost done …": "snart ferdig …",
         "New edition ready": "Ny utgave klar",
         "View →": "Vis →",
+        "Newer edition available — refresh when you're ready":
+            "Nyere utgave tilgjengelig — oppdater når du vil",
+        "Toggle dark mode": "Bytt lyst/mørkt tema",
         # article
         "min read": "min lesetid",
         "Translating the article …": "Oversetter artikkelen …",
