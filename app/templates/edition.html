@@ -2,7 +2,8 @@
 {% block body %}
 <header class="masthead">
   <div class="masthead-top">
-    <span class="edition-date">{{ no_date(edition.built_at) if edition else "" }}</span>
+    <span class="folio folio-left">{% if edition %}{{ t("No.") }} {{ edition.id }}{% endif %}</span>
+    <span class="folio folio-mid">{% if edition %}{{ no_date(edition.built_at) }} · {{ t("Evening edition") if edition.built_at.hour >= 14 else t("Morning edition") }}{% endif %}</span>
     <span class="masthead-actions">
       {% if auth_enabled and not is_admin %}
         <a href="/login" class="settings-link">{{ t("Log in") }}</a>
@@ -16,6 +17,7 @@
     </span>
   </div>
   <h1 class="nameplate">{{ paper_title() }}</h1>
+  <p class="motto">{{ t("All worth knowing, before your coffee") }}</p>
   <div class="masthead-rule">
     {% if edition %}{{ t("Updated") }} {{ no_datetime(edition.built_at) }} <span class="edition-age" data-built="{{ edition.built_at.isoformat() }}"></span>{% else %}{{ t("Building the first edition …") }}{% endif %}
     {% if not llm_enabled %}<span class="badge">{{ t("demo mode: no LLM — raw curation, untranslated") }}</span>{% else %}<span class="badge ok">{{ provider_label }}</span>{% endif %}

@@ -40,6 +40,10 @@ CATALOG: dict[str, dict[str, str]] = {
         "↻ Refresh": "↻ Oppdater",
         "Fetch new content now": "Hent nytt innhold nå",
         "Updated": "Oppdatert",
+        "No.": "Nr.",
+        "Morning edition": "Morgenutgave",
+        "Evening edition": "Kveldsutgave",
+        "All worth knowing, before your coffee": "Alt verdt å vite, før kaffen",
         "Building the first edition …": "Bygger første utgave …",
         "demo mode: no LLM — raw curation, untranslated":
             "demo-modus: ingen LLM — råkuratert, uoversatt",
