@@ -1,5 +1,9 @@
 services:
   avisa:
+    # Local dev builds from the Dockerfile and tags it as this image.
+    # In production CI builds + pushes this tag to GHCR and the server only pulls it
+    # (see .github/workflows/deploy.yml — the server runs `pull` + `up --no-build`).
+    image: ghcr.io/mhellevang/avisa:latest
     build: .
     ports:
       - "8000:8000"

@@ -1,0 +1,30 @@
+# Production override — adds HTTPS via Caddy in front of the app.
+#
+# Local development stays unchanged (just `docker compose up`, reach the app on
+# http://localhost:8000). For the public deploy, layer this file on top:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# Requirements:
+#   - A domain whose A-record points to the server's public IP (set it in Caddyfile).
+#   - Server firewall: allow 80 + 443 inbound (Caddy). Port 8000 stays published on
+#     the host by the base compose, but is reachable only internally if the firewall
+#     blocks it (Hetzner firewall: allow only 22/80/443).
+
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - avisa
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  caddy-data:
+  caddy-config:

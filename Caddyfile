@@ -1,0 +1,12 @@
+# Caddy reverse proxy for Avisa (production / public deploy).
+#
+# Replace din-avis.eksempel.no with your real domain. The domain's A-record must
+# point to the server's public IP. Caddy then fetches and renews a Let's Encrypt
+# TLS certificate automatically.
+#
+# Used by docker-compose.prod.yml:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+
+din-avis.eksempel.no {
+	reverse_proxy avisa:8000
+}
