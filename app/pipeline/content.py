@@ -1,9 +1,9 @@
-"""Content-fase: henter fulltekst for nye saker. Statisk uttrekk i parallell
-først, så Playwright-fallback (delt browser) for de som ga for lite.
+"""Content phase: fetches full text for new stories. Static extraction in parallel
+first, then a Playwright fallback (shared browser) for those that yielded too little.
 
-Kjøres to steder i pipelinen:
-- fetch_new_content():      capped batch av nyeste nye saker (openpaper-stil)
-- fetch_selected_content(): garanterer at forsidesakene har fulltekst
+Run in two places in the pipeline:
+- fetch_new_content():      capped batch of the newest new stories (openpaper-style)
+- fetch_selected_content(): guarantees the front-page stories have full text
 """
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -20,16 +20,16 @@ from ..models import Article, utcnow
 
 
 def _run_fetch(targets: list[tuple[int, str]]) -> int:
-    """targets: liste av (article_id, url). Henter fulltekst og skriver tilbake.
-    Markerer content_fetched_at på alle forsøkte (også de som feiler) så vi ikke
-    prøver i evig loop."""
+    """targets: list of (article_id, url). Fetches full text and writes it back.
+    Marks content_fetched_at on all attempted (including those that fail) so we don't
+    retry in an endless loop."""
     if not targets:
         return 0
 
     results: dict[int, dict] = {}  # aid -> {content, image}
     total = len(targets)
 
-    # 1) Statisk pass i parallell
+    # 1) Static pass in parallel
     with ThreadPoolExecutor(max_workers=8) as ex:
         futs = {ex.submit(extract_static, url): aid for aid, url in targets}
         done = 0
@@ -44,7 +44,7 @@ def _run_fetch(targets: list[tuple[int, str]]) -> int:
             done += 1
             progress.detail(current("Fetching full text {done}/{total}", done=done, total=total))
 
-    # 2) Playwright-fallback for de som ikke fikk brødtekst statisk
+    # 2) Playwright fallback for those that didn't get body text statically
     misses = [
         (aid, url) for aid, url in targets if not (results.get(aid) or {}).get("content")
     ]
@@ -55,15 +55,15 @@ def _run_fetch(targets: list[tuple[int, str]]) -> int:
                     progress.detail(current("Rendering JS page {i}/{total} …", i=i, total=len(misses)))
                     res = extract_rendered(bs, url)
                     if res:
-                        # Behold evt. bilde fra statisk pass om rendret mangler.
+                        # Keep any image from the static pass if the rendered one is missing.
                         prev = results.get(aid) or {}
                         if not res.get("image") and prev.get("image"):
                             res["image"] = prev["image"]
                         results[aid] = res
         except Exception as e:
-            print(f"[content] browser-fallback utilgjengelig: {e}")
+            print(f"[content] browser fallback unavailable: {e}")
 
-    # 3) Skriv tilbake
+    # 3) Write back
     now = utcnow()
     got_text = 0
     with get_session() as s:
@@ -75,7 +75,7 @@ def _run_fetch(targets: list[tuple[int, str]]) -> int:
             if res.get("content"):
                 obj.content = res["content"]
                 got_text += 1
-            # og:image er som regel bedre enn RSS-thumbnailen — foretrekk den.
+            # og:image is usually better than the RSS thumbnail — prefer it.
             if res.get("image"):
                 obj.image_url = res["image"]
             if res:
@@ -83,13 +83,13 @@ def _run_fetch(targets: list[tuple[int, str]]) -> int:
             obj.content_fetched_at = now
         s.commit()
 
-    print(f"[content] {got_text}/{len(targets)} fikk fulltekst")
+    print(f"[content] {got_text}/{len(targets)} got full text")
     return got_text
 
 
 def fetch_new_content(limit: int | None = None) -> int:
-    """Fulltekst for de nyeste sakene som ikke er forsøkt før, kappet til
-    content_fetch_limit. Logger hvor mange som ble utsatt til neste kjør."""
+    """Full text for the newest stories not attempted before, capped at
+    content_fetch_limit. Logs how many were deferred to the next run."""
     limit = limit or settings.content_fetch_limit
     with get_session() as s:
         rows = s.exec(
@@ -102,15 +102,15 @@ def fetch_new_content(limit: int | None = None) -> int:
     total = len(targets)
     batch = targets[:limit]
     if total > len(batch):
-        print(f"[content] {total - len(batch)} saker utsatt til neste kjør (cap {limit})")
+        print(f"[content] {total - len(batch)} stories deferred to the next run (cap {limit})")
     if batch:
         progress.detail(current("0/{total} stories", total=len(batch)))
     return _run_fetch(batch)
 
 
 def fetch_selected_content() -> int:
-    """Garanterer at de kuraterte forsidesakene har fulltekst (henter de som
-    evt. falt utenfor batch-cappen over)."""
+    """Guarantees that the curated front-page stories have full text (fetches any
+    that fell outside the batch cap above)."""
     with get_session() as s:
         rows = s.exec(
             select(Article).where(

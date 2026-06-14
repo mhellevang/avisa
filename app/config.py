@@ -2,13 +2,13 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """Konfig lastes fra miljøvariabler / .env. Se .env.example."""
+    """Config is loaded from environment variables / .env. See .env.example."""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    # LLM-provider: "auto" | "openrouter" | "claude_cli" | "none"
-    #   auto  -> OpenRouter hvis nøkkel er satt, ellers lokal Claude-session
-    #            (claude-CLI) hvis tilgjengelig, ellers ingen LLM (fallback).
+    # LLM provider: "auto" | "openrouter" | "claude_cli" | "none"
+    #   auto  -> OpenRouter if a key is set, otherwise a local Claude session
+    #            (claude CLI) if available, otherwise no LLM (fallback).
     llm_provider: str = "auto"
 
     # OpenRouter
@@ -16,43 +16,45 @@ class Settings(BaseSettings):
     curate_model: str = "anthropic/claude-haiku-4.5"
     translate_model: str = "anthropic/claude-haiku-4.5"
 
-    # Lokal Claude-session (claude-CLI). Tom modell = CLI-ens standardmodell.
+    # Local Claude session (claude CLI). Empty model = the CLI's default model.
     claude_model: str = ""
 
-    # Pipeline / avis
+    # Pipeline / paper
     poll_minutes: int = 30
     front_page_size: int = 12
-    # Avisas målspråk (ISO-kode). Innhold oversettes TIL dette, og grensesnittet
-    # vises på dette språket (hvis lokalisert — ellers fallback til norsk).
-    paper_lang: str = "no"
+    # The paper's target language (ISO code). Content is translated TO this, and
+    # the interface is shown in it (if localized — otherwise it falls back to
+    # English).
+    paper_lang: str = "en"
 
-    # Innholdshenting (fulltekst)
-    content_fetch_limit: int = 40  # maks nye saker som fulltekst-hentes per kjør
-    use_playwright: bool = True  # bruk browser-fallback for JS-tunge sider
-    content_min_chars: int = 400  # under dette regnes uttrekket som mislykket
-    filter_paywalled: bool = True  # utelat saker bak betalingsmur
-    translate_body_max_chars: int = 8000  # kapp brødtekst som sendes til oversettelse
-    translate_concurrency: int = 4  # antall oversettelses-kall som kjøres samtidig
-    translate_batch_chars: int = 9000  # maks tegn samlet per batch-kall
-    translate_batch_max: int = 5  # maks artikler per batch-kall
-    # Komma-separerte språkkoder du vil la stå URØRT selv om de avviker fra
-    # målspråket (du leser dem fint selv). Saker på målspråket oversettes aldri
-    # uansett. Tom som default — målspråket alene styrer hva som oversettes.
+    # Content fetching (full text)
+    content_fetch_limit: int = 40  # max new stories fetched for full text per run
+    use_playwright: bool = True  # use the browser fallback for JS-heavy pages
+    content_min_chars: int = 400  # below this the extraction counts as failed
+    filter_paywalled: bool = True  # exclude stories behind a paywall
+    translate_body_max_chars: int = 8000  # cap on body text sent to translation
+    translate_concurrency: int = 4  # number of translation calls run in parallel
+    translate_batch_chars: int = 9000  # max chars total per batch call
+    translate_batch_max: int = 5  # max articles per batch call
+    # Comma-separated language codes you want left UNTOUCHED even if they differ
+    # from the target language (you read them fine yourself). Content already in
+    # the target language is never translated regardless. Empty by default — the
+    # target language alone decides what gets translated.
     translate_skip_langs: str = ""
-    translate_headlines_limit: int = 80  # maks ferske saker som får foroversatt tittel/ingress
-    paper_title: str = "Morgenavisa"
+    translate_headlines_limit: int = 80  # max fresh stories that get title/lede pre-translated
+    paper_title: str = "The Morning Paper"
     preferences: str = (
-        "Generelle nyheter, teknologi, klima og vitenskap. Vekt på analyse og "
-        "bakgrunn fremfor kjendis, sport og rene meningsinnlegg."
+        "General news, technology, climate and science. Weight on analysis and "
+        "background over celebrity, sports and pure opinion pieces."
     )
 
     # DB
     database_url: str = "sqlite:///./avisa.db"
 
-    # Innlogging for admin-flatene (/settings, kilder, feedback, refresh).
-    # Tom = ingen innlogging (alt åpent — greit lokalt / bak VPN).
+    # Login for the admin surfaces (/settings, sources, feedback, refresh).
+    # Empty = no login (everything open — fine locally / behind a VPN).
     admin_password: str = ""
-    # Hemmelighet for cookie-signering (faller tilbake på admin_password).
+    # Secret for cookie signing (falls back to admin_password).
     session_secret: str = ""
 
 

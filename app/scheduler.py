@@ -7,8 +7,8 @@ _scheduler: BackgroundScheduler | None = None
 
 
 def start_scheduler() -> BackgroundScheduler:
-    """Starter bakgrunns-pollingen. max_instances=1 hindrer overlapp hvis et
-    kjør tar lengre tid enn intervallet."""
+    """Starts the background polling. max_instances=1 prevents overlap if a
+    run takes longer than the interval."""
     global _scheduler
     if _scheduler:
         return _scheduler
@@ -25,15 +25,15 @@ def start_scheduler() -> BackgroundScheduler:
     )
     sched.start()
     _scheduler = sched
-    print(f"[scheduler] poller hvert {minutes}. minutt")
+    print(f"[scheduler] polling every {minutes} min")
     return sched
 
 
 def reschedule(minutes: int) -> None:
-    """Endrer poll-intervallet i drift (kalt fra innstillingssiden)."""
+    """Changes the poll interval at runtime (called from the settings page)."""
     if _scheduler:
         _scheduler.reschedule_job("poll", trigger="interval", minutes=minutes)
-        print(f"[scheduler] nytt intervall: {minutes}. minutt")
+        print(f"[scheduler] new interval: {minutes} min")
 
 
 def stop_scheduler() -> None:

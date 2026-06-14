@@ -1,16 +1,16 @@
-# Playwright-basebilde: Python + Chromium + alle system-avhengigheter
-# ferdig installert (matcher playwright==1.49.0 i requirements.txt).
+# Playwright base image: Python + Chromium + all system dependencies
+# preinstalled (matches playwright==1.49.0 in requirements.txt).
 FROM mcr.microsoft.com/playwright/python:v1.49.0-noble
 
 WORKDIR /app
 
-# Avhengigheter først for bedre lag-caching
+# Dependencies first for better layer caching
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# SQLite-fila lever i en mountet volum (se docker-compose.yml)
+# The SQLite file lives in a mounted volume (see docker-compose.yml)
 ENV DATABASE_URL=sqlite:////data/avisa.db
 VOLUME ["/data"]
 

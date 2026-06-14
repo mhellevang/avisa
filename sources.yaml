@@ -1,54 +1,54 @@
-# Nyhetskilder. Seeded inn i databasen ved første oppstart hvis tabellen er tom.
-# Etterpå kan du redigere kilder direkte i DB (eller slette avisa.db for re-seed).
+# News sources. Seeded into the database on first startup if the table is empty.
+# After that you can edit sources directly in the DB (or delete avisa.db to re-seed).
 #
-# kind: "rss"        -> RSS/Atom-feed (feedparser)
-#       "api"        -> JSON-API (foreløpig støttes Hacker News / Algolia)
-#       "playwright" -> renderer en oversiktsside og plukker artikkel-lenker
-#                       via CSS-selector i config.link_selector
-# section: brukes som fallback-seksjon før kuratering evt. overstyrer.
-# lang:    ISO-språkkode for kildens innhold ("no", "en", …). Saker fra kilder
-#          på et språk i skip-lista (innstillinger) oversettes ikke, men vises
-#          på originalspråk.
+# kind: "rss"        -> RSS/Atom feed (feedparser)
+#       "api"        -> JSON API (currently Hacker News / Algolia is supported)
+#       "playwright" -> renders an overview page and picks article links via a
+#                       CSS selector in config.link_selector
+# section: used as the fallback section before curation may override it.
+# lang:    ISO language code for the source's content ("no", "en", …). Stories
+#          from a source in a language on the skip list (settings) are not
+#          translated but shown in the original.
 #
-# Fulltekst for hver sak hentes uansett kilde i content-fasen (statisk først,
-# Playwright som fallback for JS-tunge sider).
+# Full text for each story is fetched regardless of source in the content phase
+# (static first, Playwright as a fallback for JS-heavy pages).
 
 - name: NRK Nyheter
   kind: rss
   url: https://www.nrk.no/nyheter/siste.rss
-  section: Innenriks
+  section: Domestic
   lang: no
 
 - name: BBC World
   kind: rss
   url: https://feeds.bbci.co.uk/news/world/rss.xml
-  section: Utenriks
+  section: World
   lang: en
 
 - name: The Guardian
   kind: rss
   url: https://www.theguardian.com/world/rss
-  section: Utenriks
+  section: World
   lang: en
 
 - name: Ars Technica
   kind: rss
   url: https://feeds.arstechnica.com/arstechnica/index
-  section: Teknologi
+  section: Technology
   lang: en
 
 - name: Hacker News
   kind: api
   url: https://hn.algolia.com/api/v1/search?tags=front_page
-  section: Teknologi
+  section: Technology
   lang: en
 
-# Eksempel på en feedløs, JS-rendret kilde via Playwright. Avskrudd som
-# standard — skru på (enabled: true) og juster link_selector til siden din.
-- name: Eksempel (Playwright)
+# Example of a feedless, JS-rendered source via Playwright. Disabled by
+# default — enable it (enabled: true) and adjust link_selector to your page.
+- name: Example (Playwright)
   kind: playwright
   url: https://example.com/news
-  section: Nyheter
+  section: News
   lang: en
   enabled: false
   config:

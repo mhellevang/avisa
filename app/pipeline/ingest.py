@@ -14,7 +14,7 @@ def _hash(url: str) -> str:
 
 
 def ingest() -> int:
-    """Henter fra alle aktive kilder, deduperer mot url_hash, lagrer nye."""
+    """Fetches from all active sources, dedupes against url_hash, stores new ones."""
     new_count = 0
     with get_session() as s:
         sources = s.exec(select(Source).where(Source.enabled == True)).all()  # noqa: E712
@@ -29,10 +29,10 @@ def ingest() -> int:
                     cfg = json.loads(src.config) if src.config else {}
                     raws = playwright_list.fetch_playwright_listing(src.url, cfg)
                 else:
-                    print(f"[ingest] ukjent kind '{src.kind}' for {src.name}")
+                    print(f"[ingest] unknown kind '{src.kind}' for {src.name}")
                     continue
             except Exception as e:
-                print(f"[ingest] {src.name} feilet: {e}")
+                print(f"[ingest] {src.name} failed: {e}")
                 continue
 
             for raw in raws:
@@ -61,5 +61,5 @@ def ingest() -> int:
                 )
                 new_count += 1
         s.commit()
-    print(f"[ingest] {new_count} nye artikler")
+    print(f"[ingest] {new_count} new articles")
     return new_count

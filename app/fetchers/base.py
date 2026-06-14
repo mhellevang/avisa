@@ -28,7 +28,7 @@ class _Stripper(HTMLParser):
 
 
 def strip_html(raw: str) -> str:
-    """Fjerner HTML-tagger og normaliserer whitespace."""
+    """Removes HTML tags and normalizes whitespace."""
     if not raw:
         return ""
     s = _Stripper()

@@ -1,8 +1,10 @@
-"""Enkel admin-innlogging for konfig-flatene. Ett passord (ADMIN_PASSWORD).
-Er passordet tomt, er auth avskrudd og alt er åpent — greit lokalt / bak VPN.
+"""Simple admin login for the config pages. A single password (ADMIN_PASSWORD).
+If the password is empty, auth is disabled and everything is open — fine
+locally / behind a VPN.
 
-Cookien er et HMAC-token avledet fra hemmeligheten, så den kan ikke forfalskes
-uten å kjenne passordet/SESSION_SECRET. Stateless, ingen ekstra avhengigheter."""
+The cookie is an HMAC token derived from the secret, so it cannot be forged
+without knowing the password/SESSION_SECRET. Stateless, no extra
+dependencies."""
 
 import hashlib
 import hmac

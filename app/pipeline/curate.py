@@ -11,41 +11,41 @@ from ..models import Article, utcnow
 
 
 def curate() -> int:
-    """Velger ut forsidesaker fra ferske artikler. Nullstiller forrige utvalg
-    i vinduet og merker de nye valgte."""
+    """Selects front-page stories from recent articles. Resets the previous selection
+    within the window and marks the newly selected ones."""
     with get_session() as s:
         cutoff = utcnow() - timedelta(hours=48)
         candidates = s.exec(
             select(Article).where(Article.fetched_at >= cutoff)
         ).all()
         if not candidates:
-            print("[curate] ingen kandidater")
+            print("[curate] no candidates")
             return 0
 
         progress.detail(current("Assessing {n} stories against the profile …", n=len(candidates)))
 
-        # Nullstill utvalg i vinduet før ny kuratering.
+        # Reset the selection within the window before re-curating.
         for a in candidates:
             a.selected = False
 
-        # Utelat saker uten reell brødtekst (f.eks. live-blogg-snutter som ikke
-        # ga fulltekst i content-fasen). Uten dette kan en tom sak havne på
-        # forsiden med tittel og ingen tekst.
+        # Exclude stories without real body text (e.g. live-blog snippets that didn't
+        # yield full text in the content phase). Without this, an empty story could end
+        # up on the front page with a title and no text.
         rankable = [
             a for a in candidates
             if a.content and len(a.content) >= settings.content_min_chars
         ]
         thin = len(candidates) - len(rankable)
         if thin:
-            print(f"[curate] hoppet over {thin} uten brødtekst")
+            print(f"[curate] skipped {thin} without body text")
 
-        # Utelat saker bak betalingsmur (None = ukjent → behandles som åpen).
+        # Exclude stories behind a paywall (None = unknown → treated as open).
         if settings.filter_paywalled:
             before = len(rankable)
             rankable = [a for a in rankable if not a.paywalled]
             skipped = before - len(rankable)
             if skipped:
-                print(f"[curate] hoppet over {skipped} bak betalingsmur")
+                print(f"[curate] skipped {skipped} behind paywall")
 
         ranked = curate_articles(
             rankable,
@@ -70,5 +70,5 @@ def curate() -> int:
             chosen += 1
 
         s.commit()
-    print(f"[curate] {chosen} saker valgt")
+    print(f"[curate] {chosen} stories selected")
     return chosen

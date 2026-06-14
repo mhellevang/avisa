@@ -6,7 +6,7 @@ services:
     env_file:
       - .env
     environment:
-      # Overstyr DB-sti slik at den lander i det persistente volumet
+      # Override the DB path so it lands in the persistent volume
       DATABASE_URL: sqlite:////data/avisa.db
     volumes:
       - avisa-data:/data

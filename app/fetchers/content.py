@@ -1,12 +1,13 @@
-"""Fulltekst- og bilde-uttrekk. Tiered, som openpaper:
+"""Full-text and image extraction. Tiered, like openpaper:
 
-1. Statisk: httpx GET + trafilatura — raskt, ingen browser. Dekker de fleste
-   nyhetssider som serverer artikkelteksten i HTML.
-2. Fallback: Playwright renderer siden, så trafilatura trekker ut hovedteksten.
-   Kun for sider der statisk uttrekk ga for lite (JS-tunge sider).
+1. Static: httpx GET + trafilatura — fast, no browser. Covers most news sites
+   that serve the article text in HTML.
+2. Fallback: Playwright renders the page, then trafilatura extracts the main
+   text. Only for pages where static extraction yielded too little (JS-heavy
+   pages).
 
-I tillegg hentes og:image (sosial-delingsbildet) fra HTML-en — det er som regel
-høyoppløst, mye bedre enn RSS-thumbnailene.
+In addition, og:image (the social sharing image) is fetched from the HTML — it
+is usually high-resolution, much better than the RSS thumbnails.
 """
 
 import re
@@ -41,7 +42,7 @@ def _extract_text(html: str, url: str) -> Optional[str]:
 
 
 def _og_image(html: str, url: str) -> Optional[str]:
-    """Plukker ut og:image / twitter:image fra meta-taggene."""
+    """Picks out og:image / twitter:image from the meta tags."""
     if not html:
         return None
     for prop in ("og:image:secure_url", "og:image", "twitter:image", "twitter:image:src"):
@@ -54,15 +55,15 @@ def _og_image(html: str, url: str) -> Optional[str]:
             c = re.search(r"content=[\"']([^\"']+)[\"']", m.group(0), re.I)
             if c and c.group(1).strip():
                 img = urljoin(url, c.group(1).strip())
-                # Hopp over åpenbare placeholdere/logoer — da er RSS-bildet bedre.
+                # Skip obvious placeholders/logos — in that case the RSS image is better.
                 if re.search(r"default|placeholder|logo|fallback|share[_-]?image", img, re.I):
                     return None
                 return img
     return None
 
 
-# Tydelige betalingsmur-markører (norsk + engelsk). isAccessibleForFree er
-# schema.org-standarden mange aviser oppgir og er det sterkeste signalet.
+# Clear paywall markers (Norwegian + English). isAccessibleForFree is the
+# schema.org standard many newspapers expose and is the strongest signal.
 _PAYWALL_TEXT = (
     "kun for abonnenter",
     "bli abonnent",
@@ -87,7 +88,7 @@ def _is_paywalled(html: str) -> bool:
 
 
 def _result(html: str, url: str) -> dict:
-    """{content, image, paywalled} fra HTML. content er None hvis for kort."""
+    """{content, image, paywalled} from HTML. content is None if too short."""
     text = _extract_text(html, url)
     if text and len(text) < settings.content_min_chars:
         text = None
@@ -99,7 +100,7 @@ def _result(html: str, url: str) -> dict:
 
 
 def extract_static(url: str) -> Optional[dict]:
-    """Henter og trekker ut tekst + bilde uten browser. None hvis henting feiler."""
+    """Fetches and extracts text + image without a browser. None if the fetch fails."""
     try:
         r = httpx.get(url, timeout=20.0, follow_redirects=True, headers={"User-Agent": _UA})
         r.raise_for_status()
@@ -109,7 +110,7 @@ def extract_static(url: str) -> Optional[dict]:
 
 
 def extract_rendered(browser, url: str) -> Optional[dict]:
-    """Trekker ut tekst + bilde fra en Playwright-rendret side."""
+    """Extracts text + image from a Playwright-rendered page."""
     html = browser.render(url)
     if not html:
         return None

@@ -9,7 +9,7 @@ engine = create_engine(settings.database_url, connect_args=connect_args)
 
 
 def init_db() -> None:
-    # Importer modeller slik at de registreres på metadata før create_all.
+    # Import models so they get registered on the metadata before create_all.
     from . import models  # noqa: F401
 
     SQLModel.metadata.create_all(engine)
@@ -17,9 +17,9 @@ def init_db() -> None:
 
 
 def _migrate() -> None:
-    """Legger til kolonner som finnes i modellene, men ikke i en eksisterende
-    tabell. SQLModel.create_all lager ikke nye kolonner på gamle tabeller, så
-    dette hindrer «no such column» når vi utvider modellene."""
+    """Adds columns that exist in the models but not in an existing table.
+    SQLModel.create_all does not create new columns on old tables, so this
+    prevents "no such column" when we extend the models."""
     from sqlalchemy import inspect as sa_inspect, text
 
     insp = sa_inspect(engine)
@@ -36,9 +36,9 @@ def _migrate() -> None:
                     conn.execute(
                         text(f'ALTER TABLE "{table.name}" ADD COLUMN "{col.name}" {coltype}')
                     )
-                print(f"[db] la til kolonne {table.name}.{col.name}")
+                print(f"[db] added column {table.name}.{col.name}")
             except Exception as e:
-                print(f"[db] migrering {table.name}.{col.name} feilet: {e}")
+                print(f"[db] migration {table.name}.{col.name} failed: {e}")
 
 
 def get_session() -> Session:

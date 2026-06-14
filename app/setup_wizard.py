@@ -1,7 +1,7 @@
-"""Interaktiv oppsett-veiviser. Kjøres med `./avisa setup` (eller
-`python -m app.setup_wizard`). Stiller spørsmål om avistittel, redaksjonell
-profil og kilder, og skriver til databasen — i samme ånd som openpapers
-onboarding, men for den alltid-på tjenesten."""
+"""Interactive setup wizard. Run with `./avisa setup` (or
+`python -m app.setup_wizard`). Asks about the paper title, editorial
+profile, and sources, and writes to the database — in the same spirit as
+openpaper's onboarding, but for the always-on service."""
 
 import json
 
@@ -20,15 +20,15 @@ def _ask(prompt: str, default: str = "") -> str:
 
 
 def _ask_yes(prompt: str, default_yes: bool = True) -> bool:
-    d = "J/n" if default_yes else "j/N"
+    d = "Y/n" if default_yes else "y/N"
     ans = input(f"{prompt} ({d}): ").strip().lower()
     if not ans:
         return default_yes
-    return ans in ("j", "ja", "y", "yes")
+    return ans in ("y", "yes")
 
 
 def _add_by_discovery(query: str) -> None:
-    """Smart oppsett: finn ut av en bar URL/domene."""
+    """Smart setup: figure out a bare URL/domain."""
     prop = discover.propose(query)
     if prop.get("ok"):
         with get_session() as s:
@@ -43,81 +43,81 @@ def _add_by_discovery(query: str) -> None:
                 )
             )
             s.commit()
-        print(f"    ✓ {prop['name']} — {prop['kind'].upper()} i {prop['section']} "
-              f"({prop['entries']} saker)")
+        print(f"    ✓ {prop['name']} — {prop['kind'].upper()} in {prop['section']} "
+              f"({prop['entries']} stories)")
     else:
-        print(f"    ⚠ {prop.get('reason', 'klarte ikke å finne ut av den')}")
+        print(f"    ⚠ {prop.get('reason', 'could not figure it out')}")
 
 
 def _add_manual() -> None:
-    print("\n  Manuell kilde (blank Navn for å avslutte):")
-    name = input("    Navn: ").strip()
+    print("\n  Manual source (blank Name to finish):")
+    name = input("    Name: ").strip()
     if not name:
         return "stop"
     kind = _ask("    Type (rss/api/playwright)", "rss")
     url = _ask("    URL")
-    section = _ask("    Seksjon", "Nyheter")
+    section = _ask("    Section", "News")
     cfg = None
     if kind == "playwright":
-        sel = _ask("    CSS-selector for artikkel-lenker (link_selector)")
+        sel = _ask("    CSS selector for article links (link_selector)")
         if sel:
             cfg = json.dumps({"link_selector": sel})
     with get_session() as s:
         s.add(Source(name=name, kind=kind, url=url, section=section, enabled=True, config=cfg))
         s.commit()
-    print(f"    ✓ La til {name}")
+    print(f"    ✓ Added {name}")
 
 
 def main() -> None:
     print("=" * 56)
-    print("  Avisa — oppsett")
+    print("  Avisa — setup")
     print("=" * 56)
     init_db()
 
-    print(f"\nLLM-provider: {llm.provider_label()}")
+    print(f"\nLLM provider: {llm.provider_label()}")
     if not llm.enabled():
-        print("  (Tips: sett OPENROUTER_API_KEY i .env, eller logg inn med "
-              "`claude` lokalt, for kuratering + oversettelse.)")
+        print("  (Tip: set OPENROUTER_API_KEY in .env, or log in with "
+              "`claude` locally, for curation + translation.)")
 
-    # Tittel + profil
-    print("\n— Avis —")
-    title = _ask("Tittel på avisa", runtime_config.paper_title())
+    # Title + profile
+    print("\n— Paper —")
+    title = _ask("Paper title", runtime_config.paper_title())
     runtime_config.set_value("paper_title", title)
 
-    print("\n— Redaksjonell profil —")
-    print("Beskriv hva du vil lese (temaer, vekting, hva du vil unngå).")
-    print(f"Nåværende: {runtime_config.preferences()}")
-    if _ask_yes("Vil du endre profilen?", default_yes=False):
-        prof = input("Ny profil:\n  ").strip()
+    print("\n— Editorial profile —")
+    print("Describe what you want to read (topics, weighting, what to avoid).")
+    print(f"Current: {runtime_config.preferences()}")
+    if _ask_yes("Do you want to change the profile?", default_yes=False):
+        prof = input("New profile:\n  ").strip()
         if prof:
             runtime_config.set_value("preferences", prof)
 
-    size = _ask("Antall saker på forsiden", str(runtime_config.front_page_size()))
+    size = _ask("Number of stories on the front page", str(runtime_config.front_page_size()))
     runtime_config.set_value("front_page_size", size)
-    poll = _ask("Poll-intervall i minutter", str(runtime_config.poll_minutes()))
+    poll = _ask("Poll interval in minutes", str(runtime_config.poll_minutes()))
     runtime_config.set_value("poll_minutes", poll)
 
-    # Kilder
-    print("\n— Kilder —")
+    # Sources
+    print("\n— Sources —")
     with get_session() as s:
         existing = s.exec(select(Source)).all()
     if existing:
-        print(f"Du har allerede {len(existing)} kilder:")
+        print(f"You already have {len(existing)} sources:")
         for src in existing:
-            print(f"  · {src.name} ({src.kind}) — {'på' if src.enabled else 'av'}")
-    if _ask_yes("Vil du legge til kilder nå?", default_yes=not existing):
-        print("Skriv nettsteder du leser — bare navn/URL, komma-separert.")
-        print("  f.eks.: nrk.no, bbc.com, aftenposten.no")
-        line = input("Nettsteder: ").strip()
+            print(f"  · {src.name} ({src.kind}) — {'on' if src.enabled else 'off'}")
+    if _ask_yes("Do you want to add sources now?", default_yes=not existing):
+        print("Enter the sites you read — just name/URL, comma-separated.")
+        print("  e.g.: nrk.no, bbc.com, aftenposten.no")
+        line = input("Sites: ").strip()
         for q in [x.strip() for x in line.split(",") if x.strip()]:
-            print(f"  Sjekker {q} …")
+            print(f"  Checking {q} …")
             _add_by_discovery(q)
-        if _ask_yes("Vil du legge til noen manuelt (API/playwright)?", default_yes=False):
+        if _ask_yes("Do you want to add any manually (API/playwright)?", default_yes=False):
             while True:
                 if _add_manual() == "stop":
                     break
 
-    print("\n✓ Oppsett ferdig. Start med:  ./avisa start")
+    print("\n✓ Setup complete. Start with:  ./avisa start")
 
 
 if __name__ == "__main__":

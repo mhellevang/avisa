@@ -1,6 +1,6 @@
-"""Smart kilde-oppsett: gi en bar URL eller et domene, så finner vi RSS-feeden
-automatisk og lar LLM-en navngi og seksjonere den. Inspirert av openpaper, der
-du bare sier «add nrk.no» og agenten finner ut av resten."""
+"""Smart source setup: give a bare URL or a domain, and we find the RSS feed
+automatically and let the LLM name and section it. Inspired by openpaper, where
+you just say "add nrk.no" and the agent figures out the rest."""
 
 import json
 import re
@@ -14,7 +14,7 @@ _UA = (
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36"
 )
 
-# Vanlige feed-stier å prøve hvis siden ikke deklarerer en <link>.
+# Common feed paths to try if the site doesn't declare a <link>.
 _COMMON_PATHS = [
     "/rss",
     "/feed",
@@ -70,9 +70,9 @@ def _validate_feed(url: str) -> tuple[str, int] | None:
 
 
 def discover_feeds(site_url: str) -> tuple[str | None, list[dict]]:
-    """Returnerer (sidens HTML, liste av fungerende feeder)."""
+    """Returns (the page's HTML, list of working feeds)."""
     html = _fetch(site_url)
-    candidates: list[str] = [site_url]  # kanskje URL-en alt er en feed
+    candidates: list[str] = [site_url]  # maybe the URL is already a feed
     candidates += _declared_feeds(site_url, html)
     candidates += [urljoin(site_url, p) for p in _COMMON_PATHS]
 
@@ -91,8 +91,8 @@ def discover_feeds(site_url: str) -> tuple[str | None, list[dict]]:
 
 
 def detect_playwright_source(site: str, title: str) -> dict | None:
-    """Feedløs side: render med Playwright, la LLM foreslå en link-selector, og
-    valider den ved å faktisk kjøre den. Krever Playwright + LLM."""
+    """Feedless site: render with Playwright, let the LLM suggest a link
+    selector, and validate it by actually running it. Requires Playwright + LLM."""
     from .. import i18n, llm, runtime_config
     from .browser import BrowserSession, playwright_available
 
@@ -110,10 +110,10 @@ def detect_playwright_source(site: str, title: str) -> dict | None:
             selector = sug["link_selector"]
             links = bs.links(site, selector)
     except Exception as e:
-        print(f"[discover] playwright-deteksjon feilet: {e}")
+        print(f"[discover] playwright detection failed: {e}")
         return None
 
-    # Valider: nok lenker med meningsfull tekst?
+    # Validate: enough links with meaningful text?
     good = [(h, t) for h, t in links if t and len(t.strip()) >= 20]
     if len(good) < 5:
         return None
@@ -122,18 +122,18 @@ def detect_playwright_source(site: str, title: str) -> dict | None:
         "name": (sug.get("name") or title or urlparse(site).netloc).strip()[:80],
         "kind": "playwright",
         "url": site,
-        "section": sug.get("section") or "Nyheter",
+        "section": sug.get("section") or "News",
         "entries": len(good),
         "config": json.dumps({"link_selector": selector}),
     }
 
 
 def propose(user_input: str) -> dict:
-    """Foreslår (og validerer) en kildekonfig fra en bar URL/domene.
-    Returnerer {ok, name, kind, url, section, entries} eller {ok: False, reason}."""
+    """Proposes (and validates) a source config from a bare URL/domain.
+    Returns {ok, name, kind, url, section, entries} or {ok: False, reason}."""
     site = normalize_url(user_input)
     if not site:
-        return {"ok": False, "reason": "Tom input."}
+        return {"ok": False, "reason": "Empty input."}
 
     html, feeds = discover_feeds(site)
     title = _page_title(html)
@@ -141,7 +141,7 @@ def propose(user_input: str) -> dict:
     from .. import i18n, llm, runtime_config
 
     target = i18n.lang_prompt_name(runtime_config.paper_lang())
-    # Fant vi ingen feed automatisk? Be LLM gjette en kjent feed-URL og valider.
+    # Found no feed automatically? Ask the LLM to guess a known feed URL and validate.
     if not feeds:
         guess = llm.suggest_feed_url(site, title, target=target)
         if guess and guess.get("url"):
@@ -152,32 +152,32 @@ def propose(user_input: str) -> dict:
                     "name": (guess.get("name") or res[0] or title or urlparse(site).netloc).strip()[:80],
                     "kind": "rss",
                     "url": guess["url"],
-                    "section": guess.get("section") or "Nyheter",
+                    "section": guess.get("section") or "News",
                     "entries": res[1],
                 }
-        # Ingen feed å finne: prøv å auto-detektere en Playwright-selector.
+        # No feed to find: try to auto-detect a Playwright selector.
         pw = detect_playwright_source(site, title)
         if pw:
             return pw
         return {
             "ok": False,
             "reason": (
-                f"Fant verken RSS-feed eller en brukbar artikkel-selector på {site}. "
-                f"Legg den til manuelt nedenfor."
+                f"Found neither an RSS feed nor a usable article selector on {site}. "
+                f"Add it manually below."
             ),
         }
 
-    # La LLM velge beste feed + navn + seksjon hvis tilgjengelig.
+    # Let the LLM choose the best feed + name + section if available.
     choice = llm.choose_source(site, title, feeds, target=target)
     if choice and choice.get("url"):
         url = choice["url"]
         name = choice.get("name") or title or urlparse(site).netloc
-        section = choice.get("section") or "Nyheter"
+        section = choice.get("section") or "News"
     else:
         best = feeds[0]
         url = best["url"]
         name = best["title"] or title or urlparse(site).netloc
-        section = "Nyheter"
+        section = "News"
 
     entries = next((f["entries"] for f in feeds if f["url"] == url), feeds[0]["entries"])
     return {

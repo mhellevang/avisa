@@ -1,12 +1,12 @@
-"""Konfig som kan endres i drift. Verdier lagres i Setting-tabellen og
-overstyrer env-defaultene fra config.settings. Lest på nytt ved behov — billig
-nok på dette trafikknivået."""
+"""Configuration that can be changed at runtime. Values are stored in the
+Setting table and override the env defaults from config.settings. Re-read on
+demand — cheap enough at this traffic level."""
 
 from .config import settings
 from .db import get_session
 from .models import Setting
 
-# Default-verdiene kommer fra env / config.Settings.
+# The default values come from env / config.Settings.
 DEFAULTS: dict[str, str] = {
     "paper_title": settings.paper_title,
     "preferences": settings.preferences,
@@ -59,21 +59,22 @@ def poll_minutes() -> int:
 
 
 def paper_lang() -> str:
-    """Avisas målspråk (ISO-kode)."""
+    """The paper's target language (ISO code)."""
     return (get("paper_lang") or "no").strip().lower()
 
 
 def skip_langs() -> set[str]:
-    """Kildespråk brukeren eksplisitt vil la stå urørt (utenom målspråket)."""
+    """Source languages the user explicitly wants left untouched (besides the
+    target language)."""
     raw = get("translate_skip_langs")
     return {p.strip().lower() for p in raw.split(",") if p.strip()}
 
 
 def should_translate(source_lang: str) -> bool:
-    """True hvis en sak fra en kilde med dette språket skal oversettes til
-    målspråket. Oversett aldri det som alt er på målspråket eller står i
-    brukerens «la stå urørt»-liste."""
+    """True if an article from a source in this language should be translated
+    into the target language. Never translate what is already in the target
+    language or appears in the user's "leave untouched" list."""
     sl = (source_lang or "").strip().lower()
     if not sl:
-        return True  # ukjent språk → oversett heller enn å vise fremmedspråk
+        return True  # unknown language → translate rather than show a foreign language
     return sl != paper_lang() and sl not in skip_langs()

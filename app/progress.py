@@ -1,6 +1,7 @@
-"""Live fremdrift for pipeline-kjøringer. In-memory (appen kjører som én
-prosess), trådsikker. Frontend poller /status og viser hva som skjer — vår
-erstatning for live-narrasjonen openpaper får gratis inne i Claude Code."""
+"""Live progress for pipeline runs. In-memory (the app runs as a single
+process), thread-safe. The frontend polls /status and shows what's happening —
+our replacement for the live narration openpaper gets for free inside Claude
+Code."""
 
 import threading
 import time
@@ -9,19 +10,19 @@ _lock = threading.Lock()
 _state: dict = {
     "running": False,
     "stage": "idle",
-    "message": "Klar.",
+    "message": "Ready.",
     "detail": "",
     "step": 0,
     "steps": 0,
     "started": 0.0,
-    "last_duration": None,  # sekunder forrige kjør tok
+    "last_duration": None,  # seconds the previous run took
     "last_finished": None,  # epoch
     "result": None,
 }
 
 
 def begin() -> None:
-    from . import i18n  # lazy: unngår import-syklus
+    from . import i18n  # lazy: avoids an import cycle
 
     with _lock:
         _state.update(
@@ -56,7 +57,7 @@ def finish(result: dict | None) -> None:
         _state.update(
             running=False,
             stage="done",
-            message="Ferdig.",
+            message="Done.",
             detail="",
             last_duration=round(dur, 1) if dur else None,
             last_finished=time.time(),

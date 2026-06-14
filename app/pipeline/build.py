@@ -17,19 +17,19 @@ def _slot(rank: int) -> str:
 
 
 def build_edition() -> Optional[int]:
-    """Bygger en ny utgave av de valgte sakene, sortert på score. Hver utgave
-    er et øyeblikksbilde — forsiden viser alltid nyeste utgave."""
+    """Builds a new edition from the selected stories, sorted by score. Each edition
+    is a snapshot — the front page always shows the latest edition."""
     with get_session() as s:
         selected = s.exec(
             select(Article)
             .where(Article.selected == True)  # noqa: E712
             .order_by(Article.score.desc())
         ).all()
-        # Sikkerhetsnett: betalingsmur kan ha blitt oppdaget etter kuratering.
+        # Safety net: a paywall may have been detected after curation.
         if settings.filter_paywalled:
             selected = [a for a in selected if not a.paywalled]
         if not selected:
-            print("[build] ingen valgte saker — hopper over utgave")
+            print("[build] no selected stories — skipping edition")
             return None
 
         ed = Edition(built_at=utcnow(), title=runtime_config.paper_title())
@@ -47,5 +47,5 @@ def build_edition() -> Optional[int]:
                 )
             )
         s.commit()
-        print(f"[build] utgave {ed.id} med {len(selected)} saker")
+        print(f"[build] edition {ed.id} with {len(selected)} stories")
         return ed.id

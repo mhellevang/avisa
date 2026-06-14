@@ -5,8 +5,8 @@ from sqlmodel import Field, SQLModel
 
 
 def utcnow() -> datetime:
-    """Naiv UTC. Vi holder oss til naive datetimes overalt så SQLite-
-    sammenligninger blir konsistente."""
+    """Naive UTC. We stick to naive datetimes everywhere so SQLite
+    comparisons stay consistent."""
     return datetime.utcnow()
 
 
@@ -15,13 +15,14 @@ class Source(SQLModel, table=True):
     name: str
     kind: str  # "rss" | "api" | "playwright"
     url: str
-    section: str = "Nyheter"
+    section: str = "News"
     enabled: bool = True
-    # ISO-språkkode for kildens innhold (f.eks. "no", "en"). Styrer om saker
-    # oversettes: språk i skip-lista (innstillinger) oversettes ikke.
+    # ISO language code for the source's content (e.g. "no", "en"). Controls
+    # whether articles are translated: languages in the skip list (settings)
+    # are not translated.
     lang: str = "en"
-    # Fetcher-spesifikk config som JSON-streng (f.eks. link_selector for
-    # playwright-listing). None for enkle kilder.
+    # Fetcher-specific config as a JSON string (e.g. link_selector for the
+    # playwright listing). None for simple sources.
     config: Optional[str] = None
 
 
@@ -38,24 +39,25 @@ class Article(SQLModel, table=True):
     image_url: str = ""
     published_at: Optional[datetime] = None
     fetched_at: datetime = Field(default_factory=utcnow)
-    content_fetched_at: Optional[datetime] = None  # None = fulltekst ikke forsøkt ennå
-    paywalled: bool = False  # oppdaget bak betalingsmur
-    section: str = "Nyheter"
+    content_fetched_at: Optional[datetime] = None  # None = full text not attempted yet
+    paywalled: bool = False  # detected behind a paywall
+    section: str = "News"
 
-    # Kuratering
+    # Curation
     score: float = 0.0
     selected: bool = False
     curate_reason: str = ""
 
-    # Oversettelse til avisas målspråk. Kolonnenavnene har historisk "_no", men
-    # innholdet er på det språket translated_lang angir (None = ikke oversatt).
+    # Translation into the paper's target language. The column names
+    # historically use "_no", but the content is in whatever language
+    # translated_lang indicates (None = not translated).
     title_no: Optional[str] = None
     summary_no: Optional[str] = None
     content_no: Optional[str] = None
-    translated_lang: Optional[str] = None  # språkkode cachen er oversatt til
+    translated_lang: Optional[str] = None  # language code the cache is translated to
     translated_at: Optional[datetime] = None
 
-    # Visnings-hjelpere (norsk hvis tilgjengelig, ellers original)
+    # Display helpers (translated if available, otherwise the original)
     @property
     def display_title(self) -> str:
         return self.title_no or self.title
@@ -68,12 +70,13 @@ class Article(SQLModel, table=True):
 class Edition(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     built_at: datetime = Field(default_factory=utcnow)
-    title: str = "Morgenavisa"
+    title: str = "Morning Edition"
 
 
 class Setting(SQLModel, table=True):
-    """Nøkkel/verdi for konfig som kan endres i drift (overstyrer env-defaults).
-    Brukt av web-innstillinger, CLI-veiviser og tilbakemeldingsfunksjonen."""
+    """Key/value for configuration that can be changed at runtime (overrides
+    env defaults). Used by the web settings, the CLI wizard, and the feedback
+    feature."""
 
     key: str = Field(primary_key=True)
     value: str = ""

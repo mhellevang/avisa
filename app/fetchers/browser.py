@@ -1,6 +1,6 @@
-"""Delt Playwright-browser. Brukes både til fulltekst-fallback (content-fasen)
-og til playwright listing-fetcheren. Én Chromium startes per `with`-blokk og
-gjenbrukes for alle sider, akkurat som openpaper sin delte browser."""
+"""Shared Playwright browser. Used both for the full-text fallback (content
+phase) and for the playwright listing fetcher. One Chromium is started per
+`with` block and reused for all pages, just like openpaper's shared browser."""
 
 from typing import Optional
 
@@ -13,8 +13,8 @@ class BrowserSession:
         self._browser = None
 
     def __enter__(self) -> "BrowserSession":
-        # Importeres lazy så appen kjører selv om Playwright/Chromium ikke er
-        # installert (da brukes bare statisk henting).
+        # Imported lazily so the app runs even if Playwright/Chromium is not
+        # installed (in that case only static fetching is used).
         from playwright.sync_api import sync_playwright
 
         self._pw = sync_playwright().start()
@@ -40,7 +40,7 @@ class BrowserSession:
         return page
 
     def render(self, url: str) -> Optional[str]:
-        """Returnerer rendret HTML for en side, eller None ved feil."""
+        """Returns rendered HTML for a page, or None on error."""
         page = None
         try:
             page = self._new_page()
@@ -48,15 +48,15 @@ class BrowserSession:
             page.wait_for_timeout(self.settle_ms)
             return page.content()
         except Exception as e:
-            print(f"[browser] render feilet {url}: {e}")
+            print(f"[browser] render failed {url}: {e}")
             return None
         finally:
             if page:
                 page.close()
 
     def link_candidates(self, url: str, limit: int = 40) -> list[dict]:
-        """Høster <a>-lenker med tekst + class-info, for å la LLM-en foreslå en
-        selector for artikkel-lenker på en feedløs side."""
+        """Harvests <a> links with text + class info, so the LLM can suggest a
+        selector for article links on a feedless site."""
         js = """
         (limit) => {
           const out = []; const seen = new Set();
@@ -85,15 +85,15 @@ class BrowserSession:
             page.wait_for_timeout(self.settle_ms)
             return page.evaluate(js, limit) or []
         except Exception as e:
-            print(f"[browser] link_candidates feilet {url}: {e}")
+            print(f"[browser] link_candidates failed {url}: {e}")
             return []
         finally:
             if page:
                 page.close()
 
     def links(self, url: str, selector: str) -> list[tuple[str, str]]:
-        """Returnerer (href, lenketekst) for alle elementer som matcher
-        CSS-selector på en rendret side."""
+        """Returns (href, link text) for all elements matching the CSS
+        selector on a rendered page."""
         page = None
         out: list[tuple[str, str]] = []
         try:
@@ -107,7 +107,7 @@ class BrowserSession:
                 text = (el.inner_text() or "").strip()
                 out.append((href, text))
         except Exception as e:
-            print(f"[browser] links feilet {url}: {e}")
+            print(f"[browser] links failed {url}: {e}")
         finally:
             if page:
                 page.close()

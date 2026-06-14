@@ -78,7 +78,7 @@ def front(request: Request):
     secondary = [a for ei, a in items if ei.slot == "secondary"]
     body = [a for ei, a in items if ei.slot == "body"]
 
-    # Grupper body-saker etter seksjon for et avis-aktig oppsett.
+    # Group body stories by section for a newspaper-like layout.
     sections: dict[str, list[Article]] = {}
     for a in body:
         sections.setdefault(a.section, []).append(a)
@@ -140,15 +140,15 @@ def article(request: Request, article_id: int):
         if not a:
             return HTMLResponse(i18n.current("Article not found"), status_code=404)
 
-        # Skal saken oversettes til målspråket? (Ikke hvis den alt er på
-        # målspråket eller kildespråket står i «la stå urørt».)
+        # Should the story be translated to the target language? (Not if it's
+        # already in the target language or the source language is in "leave untouched".)
         src = s.get(Source, a.source_id)
         plang = runtime_config.paper_lang()
         do_translate = llm.enabled() and runtime_config.should_translate(src.lang if src else "")
 
-        # Tittel+ingress oversettes inline hvis det mangler — kort tekst, går
-        # fort. Brødteksten hentes IKKE-blokkerende via /article/{id}/body etter
-        # at siden er vist, så åpningen aldri venter på en full-tekst-oversettelse.
+        # Title + summary are translated inline if missing — short text, quick.
+        # The body is fetched NON-blockingly via /article/{id}/body after the
+        # page is shown, so opening never waits on a full-text translation.
         if do_translate and a.title_no is None:
             res = llm.translate_fields(
                 a.title, a.summary or "", target=i18n.lang_prompt_name(plang)
@@ -164,7 +164,7 @@ def article(request: Request, article_id: int):
 
         body_pending = do_translate and bool(a.content) and a.content_no is None
 
-        # Forrige/neste innenfor nyeste utgave, så man kan bla som i en avis.
+        # Previous/next within the latest edition, so you can page through it like a newspaper.
         ed = s.exec(select(Edition).order_by(Edition.id.desc())).first()
         prev_item = next_item = None
         if ed:
@@ -185,7 +185,7 @@ def article(request: Request, article_id: int):
                     n = order[i + 1]
                     next_item = {"id": n.id, "title": n.display_title}
 
-        # Lesetid (~200 ord/min).
+        # Reading time (~200 words/min).
         text = a.content_no or a.content or a.display_summary or ""
         words = len(text.split())
         read_min = max(1, round(words / 200)) if words else None
@@ -205,13 +205,13 @@ def article(request: Request, article_id: int):
 
 @router.post("/article/{article_id}/body")
 def article_body(article_id: int):
-    """Oversetter brødteksten på forespørsel og returnerer den som HTML-avsnitt.
-    Kalles av artikkelsiden etter render, så åpningen ikke blokkeres. Caches
-    (content_no + translated_at), så bare første gang koster."""
+    """Translates the body on demand and returns it as HTML paragraphs.
+    Called by the article page after render, so opening isn't blocked. Cached
+    (content_no + translated_at), so only the first time costs anything."""
     with get_session() as s:
         a = s.get(Article, article_id)
         if not a:
-            return JSONResponse({"error": "ikke funnet"}, status_code=404)
+            return JSONResponse({"error": "not found"}, status_code=404)
         src = s.get(Source, a.source_id)
         do_translate = llm.enabled() and runtime_config.should_translate(src.lang if src else "")
         if do_translate and a.content and a.content_no is None:
@@ -233,8 +233,8 @@ def article_body(article_id: int):
 
 @router.get("/more", response_class=HTMLResponse)
 def more(request: Request, offset: int = 0, limit: int = 30):
-    """Flere saker — paginerer over ferskt korpus utenfor nyeste utgave.
-    Umiddelbart, ingen prosessering on-the-fly."""
+    """More stories — paginates over the fresh corpus outside the latest edition.
+    Immediate, no on-the-fly processing."""
     with get_session() as s:
         ed = s.exec(select(Edition).order_by(Edition.id.desc())).first()
         in_edition: set[int] = set()
@@ -272,15 +272,15 @@ def more(request: Request, offset: int = 0, limit: int = 30):
 
 @router.post("/refresh")
 def refresh(background_tasks: BackgroundTasks):
-    """Trigger pipeline nå (i bakgrunnen), og send brukeren tilbake til
-    forsiden. Dette er 'hent nytt innhold live'-knappen."""
+    """Trigger the pipeline now (in the background) and send the user back to
+    the front page. This is the 'fetch new content live' button."""
     background_tasks.add_task(run_pipeline)
     return RedirectResponse(url="/", status_code=303)
 
 
 @router.get("/status")
 def status():
-    """Live pipeline-status for fremdriftsvisning på forsiden."""
+    """Live pipeline status for the progress display on the front page."""
     snap = progress.snapshot()
     with get_session() as s:
         ed = s.exec(select(Edition).order_by(Edition.id.desc())).first()
@@ -291,7 +291,7 @@ def status():
 
 
 # --------------------------------------------------------------------------- #
-# Tilbakemelding → justert profil
+# Feedback → adjusted profile
 # --------------------------------------------------------------------------- #
 @router.post("/feedback")
 def feedback(background_tasks: BackgroundTasks, feedback: str = Form(...)):
@@ -304,15 +304,15 @@ def feedback(background_tasks: BackgroundTasks, feedback: str = Form(...)):
         if revised:
             runtime_config.set_value("preferences", revised)
         else:
-            # Uten LLM: legg tilbakemeldingen som et notat i profilen.
+            # Without an LLM: add the feedback as a note in the profile.
             runtime_config.set_value("preferences", f"{current}\n- {feedback}")
-        # Bygg avisa på nytt med justert profil.
+        # Rebuild the paper with the adjusted profile.
         background_tasks.add_task(run_pipeline)
     return RedirectResponse(url="/", status_code=303)
 
 
 # --------------------------------------------------------------------------- #
-# Innstillinger
+# Settings
 # --------------------------------------------------------------------------- #
 @router.get("/settings", response_class=HTMLResponse)
 def settings_page(request: Request, saved: int = 0, msg: str = ""):
@@ -320,8 +320,8 @@ def settings_page(request: Request, saved: int = 0, msg: str = ""):
         sources = s.exec(select(Source).order_by(Source.id)).all()
     plang = runtime_config.paper_lang()
     skip = runtime_config.skip_langs()
-    # Avkrysningskandidater: språk som finnes blant kildene (≠ målspråket),
-    # pluss eventuelle skip-språk som ikke lenger har en kilde.
+    # Checkbox candidates: languages present among the sources (≠ target language),
+    # plus any skip languages that no longer have a source.
     cand = {(src.lang or "").strip().lower() for src in sources}
     cand |= skip
     cand.discard("")
@@ -366,12 +366,13 @@ def settings_save(
     runtime_config.set_value("front_page_size", str(max(1, front_page_size)))
     poll = max(1, poll_minutes)
     runtime_config.set_value("poll_minutes", str(poll))
-    # Skip-språk kommer som avkryssede bokser; normaliser til komma-separert.
+    # Skip languages come in as checked boxes; normalize to comma-separated.
     langs = ",".join(sorted({p.strip().lower() for p in skip_langs if p.strip()}))
     runtime_config.set_value("translate_skip_langs", langs)
 
-    # Bytte av målspråk: gammel oversettelses-cache er på feil språk. Nullstill
-    # den og bygg avisa på nytt så alt re-oversettes til det nye språket.
+    # Switching target language: the old translation cache is in the wrong
+    # language. Reset it and rebuild the paper so everything is re-translated
+    # to the new language.
     new_lang = (paper_lang or "no").strip().lower()
     lang_changed = new_lang != runtime_config.paper_lang()
     runtime_config.set_value("paper_lang", new_lang)
@@ -414,7 +415,7 @@ def configure_clear():
 
 @router.post("/configure")
 def configure(background_tasks: BackgroundTasks, command: str = Form(...)):
-    """Snakk med konfiguratoren: fritekst → svar + handlinger via LLM."""
+    """Talk to the configurator: free text → reply + actions via the LLM."""
     command = command.strip()
     if not command:
         return RedirectResponse(url="/settings#chat", status_code=303)
@@ -479,7 +480,7 @@ def configure(background_tasks: BackgroundTasks, command: str = Form(...)):
                     done.append(i18n.current("removed «{name}»", name=match.name)); rebuild = True
                 else:
                     match.enabled = (kind == "enable_source"); s.commit()
-                    key = "skrudde på «{name}»" if match.enabled else "skrudde av «{name}»"
+                    key = "turned on «{name}»" if match.enabled else "turned off «{name}»"
                     done.append(i18n.current(key, name=match.name))
                     rebuild = True
         elif kind == "set_preferences" and act.get("value"):
@@ -503,7 +504,7 @@ def configure(background_tasks: BackgroundTasks, command: str = Form(...)):
             except (TypeError, ValueError):
                 pass
 
-    # Bygg konfiguratorens svar: LLM-svaret + faktisk kvittering.
+    # Build the configurator's reply: the LLM answer + the actual receipt.
     bot = reply or (i18n.current("Done.") if done else i18n.current("Understood the message, but found nothing to change."))
     if done:
         bot += "\n\n✓ " + "; ".join(done) + "."
@@ -517,7 +518,7 @@ def configure(background_tasks: BackgroundTasks, command: str = Form(...)):
 
 @router.post("/sources/discover")
 def source_discover(query: str = Form(...)):
-    """Smart kilde-oppsett: finn ut av en bar URL/domene og legg den til."""
+    """Smart source setup: figure out a bare URL/domain and add it."""
     prop = discover.propose(query)
     if prop.get("ok"):
         with get_session() as s:
@@ -533,11 +534,11 @@ def source_discover(query: str = Form(...)):
             )
             s.commit()
         msg = (
-            f"✓ La til «{prop['name']}» — {prop['kind'].upper()} i {prop['section']}, "
-            f"{prop['entries']} saker funnet."
+            f"✓ Added «{prop['name']}» — {prop['kind'].upper()} in {prop['section']}, "
+            f"{prop['entries']} stories found."
         )
     else:
-        msg = "⚠ " + prop.get("reason", "Klarte ikke å finne ut av kilden.")
+        msg = "⚠ " + prop.get("reason", "Couldn't figure out the source.")
     return RedirectResponse(url=f"/settings?msg={quote(msg)}", status_code=303)
 
 
@@ -546,7 +547,7 @@ def source_add(
     name: str = Form(...),
     kind: str = Form(...),
     url: str = Form(...),
-    section: str = Form("Nyheter"),
+    section: str = Form("News"),
     lang: str = Form("en"),
     config: str = Form(""),
 ):
@@ -554,17 +555,17 @@ def source_add(
     config = config.strip()
     if config:
         try:
-            json.loads(config)  # valider
+            json.loads(config)  # validate
             cfg = config
         except json.JSONDecodeError:
-            cfg = None  # ignorer ugyldig JSON heller enn å feile
+            cfg = None  # ignore invalid JSON rather than failing
     with get_session() as s:
         s.add(
             Source(
                 name=name.strip(),
                 kind=kind.strip(),
                 url=url.strip(),
-                section=(section.strip() or "Nyheter"),
+                section=(section.strip() or "News"),
                 lang=(lang.strip().lower() or "en"),
                 enabled=True,
                 config=cfg,

@@ -16,8 +16,8 @@ def _source_langs() -> dict[int, str]:
 
 
 def _chunk(targets: list[dict]) -> list[list[dict]]:
-    """Pakker artikler i grupper innenfor et tegnbudsjett, så hvert LLM-kall
-    oversetter flere artikler men holder seg under en trygg størrelse."""
+    """Packs articles into groups within a character budget, so each LLM call
+    translates several articles but stays under a safe size."""
     budget = settings.translate_batch_chars
     max_items = settings.translate_batch_max
     body_cap = settings.translate_body_max_chars
@@ -25,7 +25,7 @@ def _chunk(targets: list[dict]) -> list[list[dict]]:
     cur: list[dict] = []
     cur_chars = 0
     for t in targets:
-        # Budsjettér på det som faktisk sendes (brødtekst kappes ved body_cap).
+        # Budget on what is actually sent (body text is capped at body_cap).
         size = min(len(t["content"]), body_cap) + len(t["summary"])
         if cur and (cur_chars + size > budget or len(cur) >= max_items):
             chunks.append(cur)
@@ -38,9 +38,9 @@ def _chunk(targets: list[dict]) -> list[list[dict]]:
 
 
 def translate() -> int:
-    """Oversetter KUN valgte (kuraterte) artikler som ikke alt er oversatt.
-    Batcher flere artikler per kall OG kjører batchene parallelt. Caches på
-    artikkelen (translated_at). Re-oversett: nullstill translated_at."""
+    """Translates ONLY selected (curated) articles that aren't already translated.
+    Batches several articles per call AND runs the batches in parallel. Cached on
+    the article (translated_at). To re-translate: reset translated_at."""
     plang = runtime_config.paper_lang()
     target = lang_prompt_name(plang)
     langs = _source_langs()
@@ -51,13 +51,13 @@ def translate() -> int:
                 Article.translated_at == None,  # noqa: E711
             )
         ).all()
-        # Hopp over saker fra kilder på et språk vi ikke oversetter (vises på
-        # originalspråk). translated_at røres ikke, så de oversettes automatisk
-        # hvis språket senere fjernes fra skip-lista.
+        # Skip stories from sources in a language we don't translate (shown in the
+        # original language). translated_at is left untouched, so they are translated
+        # automatically if the language is later removed from the skip list.
         before = len(arts)
         arts = [a for a in arts if runtime_config.should_translate(langs.get(a.source_id, ""))]
         if before - len(arts):
-            print(f"[translate] hoppet over {before - len(arts)} på utelatt språk")
+            print(f"[translate] skipped {before - len(arts)} in excluded language")
         targets = [
             {"id": a.id, "title": a.title, "summary": a.summary or "", "content": a.content or ""}
             for a in arts
@@ -65,7 +65,7 @@ def translate() -> int:
 
     total = len(targets)
     if not total:
-        print("[translate] ingen nye å oversette")
+        print("[translate] nothing new to translate")
         return 0
 
     progress.detail(current("0/{total} stories", total=total))
@@ -80,7 +80,7 @@ def translate() -> int:
             try:
                 results.update(f.result())
             except Exception as e:
-                print(f"[translate] batch feilet: {e}")
+                print(f"[translate] batch failed: {e}")
             done += len(chunk)
             progress.detail(current("Translating {done}/{total}", done=min(done, total), total=total))
 
@@ -97,7 +97,7 @@ def translate() -> int:
                 if t["content"]:
                     a.content_no = res.get("content", t["content"])
             else:
-                # Ingen LLM / feilet: behold original så UI har noe å vise.
+                # No LLM / failed: keep the original so the UI has something to show.
                 a.title_no = t["title"]
                 a.summary_no = t["summary"]
                 a.content_no = t["content"] or None
@@ -105,14 +105,14 @@ def translate() -> int:
             a.translated_at = now
         s.commit()
 
-    print(f"[translate] {total} artikler i {len(chunks)} batch(er), {workers} parallelt")
+    print(f"[translate] {total} articles in {len(chunks)} batch(es), {workers} in parallel")
     return total
 
 
 def translate_pool_headlines() -> int:
-    """Foroversetter tittel+ingress for ferske saker som ikke alt har en
-    oversatt tittel — så «flere saker»-lista er på målspråket og åpning rask.
-    Brødtekst oversettes først ved åpning (lat). Hopper over utelatte språk."""
+    """Pre-translates title+lead for recent stories that don't already have a
+    translated title — so the "more stories" list is in the target language and opens
+    quickly. Body text is translated on first open (lazy). Skips excluded languages."""
     plang = runtime_config.paper_lang()
     target = lang_prompt_name(plang)
     langs = _source_langs()
@@ -132,7 +132,7 @@ def translate_pool_headlines() -> int:
 
     total = len(targets)
     if not total:
-        print("[translate] ingen nye titler å foroversette")
+        print("[translate] no new titles to pre-translate")
         return 0
 
     max_items = settings.translate_batch_max
@@ -145,10 +145,10 @@ def translate_pool_headlines() -> int:
             try:
                 results.update(f.result())
             except Exception as e:
-                print(f"[translate] tittel-batch feilet: {e}")
+                print(f"[translate] title batch failed: {e}")
 
-    # Sett kun ved treff. Bom (feil/ingen LLM) lar title_no stå None, så det
-    # forsøkes på nytt neste kjør i stedet for å fryse originalen inn.
+    # Only set on a hit. A miss (error/no LLM) leaves title_no as None, so it is
+    # retried on the next run instead of freezing the original in.
     with get_session() as s:
         for t in targets:
             res = results.get(t["id"])
@@ -162,5 +162,5 @@ def translate_pool_headlines() -> int:
             a.translated_lang = plang
         s.commit()
 
-    print(f"[translate] foroversatte {len(results)}/{total} titler i {len(chunks)} batch(er)")
+    print(f"[translate] pre-translated {len(results)}/{total} titles in {len(chunks)} batch(es)")
     return len(results)

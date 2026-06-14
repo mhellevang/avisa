@@ -11,7 +11,7 @@ def _extract_image(entry) -> str:
         media = entry.get(key)
         if media and isinstance(media, list) and media[0].get("url"):
             return media[0]["url"]
-    # enclosures (rel=enclosure med bilde-type)
+    # enclosures (rel=enclosure with image type)
     for link in entry.get("links", []):
         if link.get("rel") == "enclosure" and "image" in link.get("type", ""):
             return link.get("href", "")
@@ -21,7 +21,7 @@ def _extract_image(entry) -> str:
 def _published(entry):
     parsed = entry.get("published_parsed") or entry.get("updated_parsed")
     if parsed:
-        # Naiv UTC for å matche resten av systemet.
+        # Naive UTC to match the rest of the system.
         return datetime(*parsed[:6])
     return None
 
@@ -43,7 +43,7 @@ def fetch_rss(url: str, limit: int = 40) -> list[RawArticle]:
         out.append(
             RawArticle(
                 url=link,
-                title=e.get("title", "(uten tittel)"),
+                title=e.get("title", "(untitled)"),
                 summary=strip_html(e.get("summary", "")),
                 content=_content(e),
                 author=e.get("author", ""),

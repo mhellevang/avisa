@@ -1,7 +1,7 @@
 """Pipeline: ingest -> curate -> translate -> build.
 
-Kjøres av scheduleren i bakgrunnen, og kan trigges manuelt fra web-UI.
-Hvert steg er idempotent nok til å kjøres om igjen.
+Run by the scheduler in the background, and can be triggered manually from the web UI.
+Each step is idempotent enough to be run again.
 """
 
 from .. import i18n, progress
@@ -13,7 +13,7 @@ from .translate import translate, translate_pool_headlines
 
 
 def run_pipeline() -> dict:
-    N = 6  # antall steg, vist som "Steg x/6"
+    N = 6  # number of steps, shown as "Step x/6"
     progress.begin()
     try:
         progress.stage("ingest", i18n.current("Fetching stories from the sources …"), 1, N)
@@ -45,5 +45,5 @@ def run_pipeline() -> dict:
         print(f"[pipeline] {result}")
         return result
     finally:
-        # finish() leser result via siste stage; sett uansett running=False
+        # finish() reads result via the last stage; set running=False regardless
         progress.finish(locals().get("result"))

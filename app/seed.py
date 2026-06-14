@@ -11,10 +11,10 @@ SOURCES_FILE = Path(__file__).resolve().parent.parent / "sources.yaml"
 
 
 def seed_sources() -> int:
-    """Leser sources.yaml inn i DB hvis tabellen er tom. Returnerer antall
-    nye kilder."""
+    """Reads sources.yaml into the DB if the table is empty. Returns the
+    number of new sources."""
     if not SOURCES_FILE.exists():
-        print(f"[seed] fant ikke {SOURCES_FILE}")
+        print(f"[seed] could not find {SOURCES_FILE}")
         return 0
 
     with get_session() as s:
@@ -31,7 +31,7 @@ def seed_sources() -> int:
                     name=row["name"],
                     kind=row["kind"],
                     url=row["url"],
-                    section=row.get("section", "Nyheter"),
+                    section=row.get("section", "News"),
                     lang=row.get("lang", "en"),
                     enabled=row.get("enabled", True),
                     config=json.dumps(cfg) if cfg else None,
@@ -39,5 +39,5 @@ def seed_sources() -> int:
             )
             count += 1
         s.commit()
-    print(f"[seed] la inn {count} kilder")
+    print(f"[seed] inserted {count} sources")
     return count

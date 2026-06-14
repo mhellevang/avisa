@@ -6,11 +6,11 @@ from .base import RawArticle
 
 
 def fetch_api(url: str, limit: int = 30) -> list[RawArticle]:
-    """Generisk JSON-API-henter. Foreløpig kjenner den igjen Hacker News
-    (Algolia). Nye API-er legges til som egne grener her."""
+    """Generic JSON API fetcher. For now it recognizes Hacker News
+    (Algolia). New APIs are added as their own branches here."""
     if "hn.algolia.com" in url or "hacker" in url.lower():
         return _fetch_hn(url, limit)
-    raise ValueError(f"Ukjent API-kilde: {url}")
+    raise ValueError(f"Unknown API source: {url}")
 
 
 def _fetch_hn(url: str, limit: int) -> list[RawArticle]:
@@ -30,8 +30,8 @@ def _fetch_hn(url: str, limit: int) -> list[RawArticle]:
         out.append(
             RawArticle(
                 url=link,
-                title=hit.get("title") or hit.get("story_title") or "(uten tittel)",
-                summary=f"{points} poeng · {comments} kommentarer på Hacker News.",
+                title=hit.get("title") or hit.get("story_title") or "(untitled)",
+                summary=f"{points} points · {comments} comments on Hacker News.",
                 author=hit.get("author", ""),
                 published_at=published,
             )

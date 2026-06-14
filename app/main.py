@@ -16,7 +16,7 @@ from .routes import router
 from .scheduler import start_scheduler, stop_scheduler
 from .seed import seed_sources
 
-# Flater som krever innlogging når ADMIN_PASSWORD er satt.
+# Pages that require login when ADMIN_PASSWORD is set.
 _PROTECTED = ("/settings", "/sources", "/configure", "/feedback", "/refresh")
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -27,8 +27,8 @@ async def lifespan(app: FastAPI):
     init_db()
     seed_sources()
 
-    # Kjør et førstegangs-pipeline i bakgrunnen hvis vi ikke har noen utgave
-    # ennå, så forsiden ikke er tom ved første oppstart.
+    # Run a first-time pipeline in the background if we don't have an edition
+    # yet, so the front page isn't empty on first startup.
     with get_session() as s:
         has_edition = s.exec(select(Edition)).first() is not None
     if not has_edition:
@@ -44,7 +44,7 @@ app = FastAPI(title="Avisa", lifespan=lifespan)
 
 @app.middleware("http")
 async def guard_admin(request, call_next):
-    """Krever innlogging på admin-flatene når auth er på. Lesing er alltid åpen."""
+    """Requires login on the admin pages when auth is on. Reading is always open."""
     path = request.url.path
     if any(path == p or path.startswith(p + "/") for p in _PROTECTED):
         if not auth.is_authed(request):

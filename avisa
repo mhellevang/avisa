@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Enkel start/stopp for Avisa (lokal kjøring).
-#   ./avisa start     start i bakgrunnen
-#   ./avisa stop      stopp
-#   ./avisa restart   stopp + start
-#   ./avisa status    kjører den?
-#   ./avisa logs      følg loggen (Ctrl+C for å avslutte)
-#   ./avisa setup     interaktiv oppsett-veiviser (tittel, profil, kilder)
-#   ./avisa dev       kjør i forgrunnen med auto-reload (for utvikling)
+# Simple start/stop for Avisa (local run).
+#   ./avisa start     start in the background
+#   ./avisa stop      stop
+#   ./avisa restart   stop + start
+#   ./avisa status    is it running?
+#   ./avisa logs      follow the log (Ctrl+C to exit)
+#   ./avisa setup     interactive setup wizard (title, profile, sources)
+#   ./avisa dev       run in the foreground with auto-reload (for development)
 set -euo pipefail
 
 cd "$(dirname "$0")"
@@ -16,32 +16,32 @@ PIDFILE=".avisa.pid"
 LOGFILE="avisa.log"
 VENV=".venv"
 
-# Velg en kompatibel Python (SQLModel takler ikke 3.14 ennå).
+# Pick a compatible Python (SQLModel can't handle 3.14 yet).
 pick_python() {
   for c in python3.13 python3.12 python3.11 python3; do
     if command -v "$c" >/dev/null 2>&1; then echo "$c"; return; fi
   done
-  echo "Fant ingen python3" >&2; exit 1
+  echo "No python3 found" >&2; exit 1
 }
 
 ensure_venv() {
   if [ ! -d "$VENV" ]; then
     local py; py="$(pick_python)"
-    echo "→ Lager virtuelt miljø med $py …"
+    echo "→ Creating virtual environment with $py …"
     "$py" -m venv "$VENV"
   fi
-  # Installer/oppgrader avhengigheter hvis noe mangler (f.eks. etter at nye
-  # pakker er lagt til i requirements.txt).
+  # Install/upgrade dependencies if anything is missing (e.g. after new
+  # packages have been added to requirements.txt).
   if ! "$VENV/bin/python" -c "import playwright, trafilatura" >/dev/null 2>&1; then
-    echo "→ Installerer avhengigheter …"
+    echo "→ Installing dependencies …"
     "$VENV/bin/pip" install -q -r requirements.txt
-    echo "→ Laster ned Chromium for Playwright (engangsjobb) …"
+    echo "→ Downloading Chromium for Playwright (one-time job) …"
     "$VENV/bin/python" -m playwright install chromium
-    echo "→ Klart."
+    echo "→ Done."
   fi
   if [ ! -f .env ]; then
     cp .env.example .env
-    echo "→ Opprettet .env fra mal (kjører i demo-modus til du legger inn OPENROUTER_API_KEY)."
+    echo "→ Created .env from template (runs in demo mode until you add OPENROUTER_API_KEY)."
   fi
 }
 
@@ -51,29 +51,29 @@ is_running() {
 
 start() {
   if is_running; then
-    echo "Avisa kjører allerede (pid $(cat "$PIDFILE")) → http://localhost:$PORT"
+    echo "Avisa is already running (pid $(cat "$PIDFILE")) → http://localhost:$PORT"
     return
   fi
   ensure_venv
-  echo "→ Starter Avisa på http://localhost:$PORT …"
+  echo "→ Starting Avisa on http://localhost:$PORT …"
   nohup "$VENV/bin/uvicorn" app.main:app --host 0.0.0.0 --port "$PORT" \
     >"$LOGFILE" 2>&1 &
   echo $! >"$PIDFILE"
   sleep 1
   if is_running; then
-    echo "✓ Oppe (pid $(cat "$PIDFILE")). Logg: ./avisa logs"
+    echo "✓ Up (pid $(cat "$PIDFILE")). Log: ./avisa logs"
   else
-    echo "✗ Klarte ikke å starte. Se $LOGFILE"; exit 1
+    echo "✗ Failed to start. See $LOGFILE"; exit 1
   fi
 }
 
 stop() {
   if is_running; then
     kill "$(cat "$PIDFILE")" && rm -f "$PIDFILE"
-    echo "✓ Stoppet."
+    echo "✓ Stopped."
   else
     rm -f "$PIDFILE"
-    echo "Avisa kjørte ikke."
+    echo "Avisa was not running."
   fi
 }
 
@@ -82,11 +82,11 @@ case "${1:-}" in
   stop)    stop ;;
   restart) stop; start ;;
   status)
-    if is_running; then echo "Kjører (pid $(cat "$PIDFILE")) → http://localhost:$PORT"
-    else echo "Stoppet."; fi ;;
+    if is_running; then echo "Running (pid $(cat "$PIDFILE")) → http://localhost:$PORT"
+    else echo "Stopped."; fi ;;
   logs)    touch "$LOGFILE"; tail -f "$LOGFILE" ;;
   setup)   ensure_venv; exec "$VENV/bin/python" -m app.setup_wizard ;;
   dev)     ensure_venv; exec "$VENV/bin/uvicorn" app.main:app --reload --port "$PORT" ;;
   *)
-    echo "Bruk: ./avisa {start|stop|restart|status|logs|setup|dev}"; exit 1 ;;
+    echo "Usage: ./avisa {start|stop|restart|status|logs|setup|dev}"; exit 1 ;;
 esac
