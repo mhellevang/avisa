@@ -8,13 +8,37 @@
   --serif: "Source Serif 4", Georgia, serif;
   --display: "Playfair Display", Georgia, serif;
   --body-serif: "Spectral", Georgia, serif;
+  --surround: #ddd5c4;
+}
+
+/* Mørk palett — gjenbrukt av både system-preferanse og manuell veksling.
+   Holdt varm («kveldsutgave») for å matche papir-estetikken. */
+:root[data-theme="dark"] {
+  --ink: #e9e2d5;
+  --ink-soft: #a59c8c;
+  --paper: #1b1916;
+  --paper-shade: #24211d;
+  --rule: #423d35;
+  --accent: #d07a57;
+  --surround: #0f0e0c;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ink: #e9e2d5;
+    --ink-soft: #a59c8c;
+    --paper: #1b1916;
+    --paper-shade: #24211d;
+    --rule: #423d35;
+    --accent: #d07a57;
+    --surround: #0f0e0c;
+  }
 }
 
 * { box-sizing: border-box; }
 
 html, body {
   margin: 0;
-  background: #ddd5c4;
+  background: var(--surround);
   color: var(--ink);
   font-family: var(--body-serif);
 }
@@ -115,7 +139,7 @@ html { scroll-behavior: smooth; }
   gap: 4px 18px;
   margin: 14px 0 4px;
   padding: 9px 2px;
-  background: rgba(244, 239, 230, 0.94);
+  background: color-mix(in srgb, var(--paper) 94%, transparent);
   backdrop-filter: blur(4px);
   border-top: 1px solid var(--ink);
   border-bottom: 1px solid var(--ink);
@@ -585,3 +609,19 @@ html { scroll-behavior: smooth; }
 
 /* Hindre at iOS blåser opp tekststørrelsen i landskapsmodus */
 html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+
+/* ---------- Tema-veksling (lys/mørk) ---------- */
+.colophon-actions { margin-top: 8px; }
+.theme-toggle {
+  font: inherit;
+  font-size: 0.95rem;
+  line-height: 1;
+  background: none;
+  border: 1px solid var(--ink-soft);
+  color: var(--ink-soft);
+  width: 30px;
+  height: 26px;
+  border-radius: 2px;
+  cursor: pointer;
+}
+.theme-toggle:hover { color: var(--paper); background: var(--ink); }
