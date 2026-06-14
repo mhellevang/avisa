@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}{{ a.display_title }} — {{ paper_title() }}{% endblock %}
+{% block body %}
+<header class="article-head">
+  <a class="back" href="/">← {{ paper_title() }}</a>
+</header>
+
+<article class="single">
+  <span class="kicker">{{ a.section }}</span>
+  <h1>{{ a.display_title }}</h1>
+  <p class="byline">
+    {% if a.author %}<span>{{ a.author }}</span>{% endif %}
+    {% if domain(a.url) %}<span>{{ domain(a.url) }}</span>{% endif %}
+    <span>{{ no_datetime(a.published_at) if a.published_at else no_datetime(a.fetched_at) }}</span>
+    {% if read_min %}<span>{{ read_min }} min lesetid</span>{% endif %}
+  </p>
+  {% if a.image_url %}<img class="article-img" src="{{ a.image_url }}" alt="" loading="lazy" onerror="this.remove()">{% endif %}
+
+  <p class="lead-para">{{ a.display_summary }}</p>
+
+  {% set bodytext = a.content_no or a.content %}
+  {% if bodytext %}
+    <div class="body-text">
+      {% for para in bodytext.split('\n') if para.strip() %}
+      <p>{{ para }}</p>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <p class="source-link">
+    Les hele saken hos kilden: <a href="{{ a.url }}" target="_blank" rel="noopener">{{ domain(a.url) or a.url }}</a>
+  </p>
+  {% if a.title_no and a.title_no != a.title %}
+    <p class="orig-note">Oversatt fra original: «{{ a.title }}»</p>
+  {% endif %}
+</article>
+
+{% if prev_item or next_item %}
+<nav class="article-nav">
+  {% if prev_item %}
+  <a class="prev" href="/article/{{ prev_item.id }}">
+    <span class="nav-dir">← Forrige</span>
+    <span class="nav-title">{{ prev_item.title|truncate(60) }}</span>
+  </a>
+  {% else %}<span></span>{% endif %}
+  {% if next_item %}
+  <a class="next" href="/article/{{ next_item.id }}">
+    <span class="nav-dir">Neste →</span>
+    <span class="nav-title">{{ next_item.title|truncate(60) }}</span>
+  </a>
+  {% endif %}
+</nav>
+{% endif %}
+{% endblock %}

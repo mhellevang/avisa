@@ -1,0 +1,13 @@
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+jinja2==3.1.5
+sqlmodel==0.0.22
+httpx==0.28.1
+feedparser==6.0.11
+APScheduler==3.11.0
+PyYAML==6.0.2
+pydantic-settings==2.7.1
+python-dotenv==1.0.1
+python-multipart==0.0.20
+playwright==1.49.0
+trafilatura==2.0.0

@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+# Enkel start/stopp for Avisa (lokal kjøring).
+#   ./avisa start     start i bakgrunnen
+#   ./avisa stop      stopp
+#   ./avisa restart   stopp + start
+#   ./avisa status    kjører den?
+#   ./avisa logs      følg loggen (Ctrl+C for å avslutte)
+#   ./avisa setup     interaktiv oppsett-veiviser (tittel, profil, kilder)
+#   ./avisa dev       kjør i forgrunnen med auto-reload (for utvikling)
+set -euo pipefail
+
+cd "$(dirname "$0")"
+
+PORT="${PORT:-8000}"
+PIDFILE=".avisa.pid"
+LOGFILE="avisa.log"
+VENV=".venv"
+
+# Velg en kompatibel Python (SQLModel takler ikke 3.14 ennå).
+pick_python() {
+  for c in python3.13 python3.12 python3.11 python3; do
+    if command -v "$c" >/dev/null 2>&1; then echo "$c"; return; fi
+  done
+  echo "Fant ingen python3" >&2; exit 1
+}
+
+ensure_venv() {
+  if [ ! -d "$VENV" ]; then
+    local py; py="$(pick_python)"
+    echo "→ Lager virtuelt miljø med $py …"
+    "$py" -m venv "$VENV"
+  fi
+  # Installer/oppgrader avhengigheter hvis noe mangler (f.eks. etter at nye
+  # pakker er lagt til i requirements.txt).
+  if ! "$VENV/bin/python" -c "import playwright, trafilatura" >/dev/null 2>&1; then
+    echo "→ Installerer avhengigheter …"
+    "$VENV/bin/pip" install -q -r requirements.txt
+    echo "→ Laster ned Chromium for Playwright (engangsjobb) …"
+    "$VENV/bin/python" -m playwright install chromium
+    echo "→ Klart."
+  fi
+  if [ ! -f .env ]; then
+    cp .env.example .env
+    echo "→ Opprettet .env fra mal (kjører i demo-modus til du legger inn OPENROUTER_API_KEY)."
+  fi
+}
+
+is_running() {
+  [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null
+}
+
+start() {
+  if is_running; then
+    echo "Avisa kjører allerede (pid $(cat "$PIDFILE")) → http://localhost:$PORT"
+    return
+  fi
+  ensure_venv
+  echo "→ Starter Avisa på http://localhost:$PORT …"
+  nohup "$VENV/bin/uvicorn" app.main:app --host 0.0.0.0 --port "$PORT" \
+    >"$LOGFILE" 2>&1 &
+  echo $! >"$PIDFILE"
+  sleep 1
+  if is_running; then
+    echo "✓ Oppe (pid $(cat "$PIDFILE")). Logg: ./avisa logs"
+  else
+    echo "✗ Klarte ikke å starte. Se $LOGFILE"; exit 1
+  fi
+}
+
+stop() {
+  if is_running; then
+    kill "$(cat "$PIDFILE")" && rm -f "$PIDFILE"
+    echo "✓ Stoppet."
+  else
+    rm -f "$PIDFILE"
+    echo "Avisa kjørte ikke."
+  fi
+}
+
+case "${1:-}" in
+  start)   start ;;
+  stop)    stop ;;
+  restart) stop; start ;;
+  status)
+    if is_running; then echo "Kjører (pid $(cat "$PIDFILE")) → http://localhost:$PORT"
+    else echo "Stoppet."; fi ;;
+  logs)    touch "$LOGFILE"; tail -f "$LOGFILE" ;;
+  setup)   ensure_venv; exec "$VENV/bin/python" -m app.setup_wizard ;;
+  dev)     ensure_venv; exec "$VENV/bin/uvicorn" app.main:app --reload --port "$PORT" ;;
+  *)
+    echo "Bruk: ./avisa {start|stop|restart|status|logs|setup|dev}"; exit 1 ;;
+esac

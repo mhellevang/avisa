@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Logg inn — {{ paper_title() }}{% endblock %}
+{% block body %}
+<header class="article-head">
+  <a class="back" href="/">← {{ paper_title() }}</a>
+  <h2 class="more-title">Logg inn</h2>
+</header>
+
+<section class="settings-block">
+  {% if error %}<p class="saved-note err">⚠ Feil passord.</p>{% endif %}
+  <form action="/login" method="post" class="settings-form" style="max-width:360px">
+    <input type="hidden" name="next" value="{{ next }}">
+    <label>Passord
+      <input type="password" name="password" autofocus required>
+    </label>
+    <button type="submit">Logg inn</button>
+  </form>
+</section>
+{% endblock %}

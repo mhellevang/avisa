@@ -1,0 +1,9 @@
+.env
+*.db
+*.log
+.avisa.pid
+__pycache__/
+*.pyc
+.venv/
+venv/
+.DS_Store

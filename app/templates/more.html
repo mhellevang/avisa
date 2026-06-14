@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Flere saker — {{ paper_title() }}{% endblock %}
+{% block body %}
+<header class="article-head">
+  <a class="back" href="/">← {{ paper_title() }}</a>
+  <h2 class="more-title">Flere saker</h2>
+</header>
+
+<div class="more-list">
+  {% for a in articles %}
+  <article class="more-item">
+    <span class="kicker">{{ a.section }}{% if source_names.get(a.source_id) %} · {{ source_names[a.source_id] }}{% endif %}</span>
+    <h3><a href="/article/{{ a.id }}">{{ a.display_title }}</a></h3>
+    <p>{{ a.display_summary|truncate(180) }}</p>
+  </article>
+  {% else %}
+  <p class="empty">Ingen flere saker akkurat nå.</p>
+  {% endfor %}
+</div>
+
+<div class="pager">
+  {% if offset > 0 %}
+    <a href="/more?offset={{ [offset - limit, 0]|max }}">← Forrige</a>
+  {% endif %}
+  {% if has_next %}
+    <a href="/more?offset={{ next_offset }}">Neste →</a>
+  {% endif %}
+</div>
+{% endblock %}

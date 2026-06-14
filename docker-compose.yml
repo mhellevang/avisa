@@ -1,0 +1,16 @@
+services:
+  avisa:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      # Overstyr DB-sti slik at den lander i det persistente volumet
+      DATABASE_URL: sqlite:////data/avisa.db
+    volumes:
+      - avisa-data:/data
+    restart: unless-stopped
+
+volumes:
+  avisa-data:

@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+{% block body %}
+<header class="masthead">
+  <div class="masthead-top">
+    <span class="edition-date">{{ no_date(edition.built_at) if edition else "" }}</span>
+    <span class="masthead-actions">
+      {% if auth_enabled and not is_admin %}
+        <a href="/login" class="settings-link">Logg inn</a>
+      {% else %}
+        <a href="/settings" class="settings-link">⚙ Innstillinger</a>
+        <form action="/refresh" method="post" class="refresh-form">
+          <button type="submit" title="Hent nytt innhold nå">↻ Oppdater</button>
+        </form>
+        {% if auth_enabled %}<form action="/logout" method="post" class="refresh-form"><button type="submit">Logg ut</button></form>{% endif %}
+      {% endif %}
+    </span>
+  </div>
+  <h1 class="nameplate">{{ paper_title() }}</h1>
+  <div class="masthead-rule">
+    {% if edition %}Oppdatert {{ no_datetime(edition.built_at) }}{% else %}Bygger første utgave …{% endif %}
+    {% if not llm_enabled %}<span class="badge">demo-modus: ingen LLM — råkuratert, uoversatt</span>{% else %}<span class="badge ok">{{ provider_label }}</span>{% endif %}
+  </div>
+</header>
+
+<!-- Live fremdriftsstripe (vises av JS når pipelinen kjører) -->
+<div id="status-strip" class="status-strip" hidden>
+  <div class="status-line">
+    <span class="spinner"></span>
+    <span id="status-msg">Forbereder …</span>
+    <span id="status-elapsed" class="status-elapsed"></span>
+  </div>
+  <span class="progress-bar"><span id="status-fill" class="progress-fill"></span></span>
+</div>
+
+{% if not edition %}
+  <section id="building" class="building">
+    <div class="spinner big"></div>
+    <h3 id="building-msg">Bygger din første utgave …</h3>
+    <span class="progress-bar"><span id="building-fill" class="progress-fill"></span></span>
+    <p id="building-detail" class="building-detail">Setter i gang …</p>
+    <p class="building-hint">Dette gjøres i bakgrunnen — siden oppdaterer seg selv når avisa er klar.</p>
+  </section>
+{% else %}
+
+{% if sections %}
+<nav class="sections-nav">
+  <a href="#topp">Toppsaker</a>
+  {% for section in sections.keys() %}
+  <a href="#sek{{ loop.index }}">{{ section }}</a>
+  {% endfor %}
+</nav>
+{% endif %}
+
+<main class="frontpage" id="topp">
+  {% if lead %}
+  <article class="lead">
+    {% if lead.image_url %}<img class="lead-img" src="{{ lead.image_url }}" alt="" loading="lazy" onerror="this.remove()">{% endif %}
+    <span class="kicker">{{ lead.section }}{% if source_names.get(lead.source_id) %} · {{ source_names[lead.source_id] }}{% endif %}</span>
+    <h2><a href="/article/{{ lead.id }}">{{ lead.display_title }}</a></h2>
+    <p class="ingress">{{ lead.display_summary }}</p>
+    {% if lead.curate_reason %}<p class="reason">{{ lead.curate_reason }}</p>{% endif %}
+  </article>
+  {% endif %}
+
+  {% if secondary %}
+  <section class="secondary">
+    {% for a in secondary %}
+    <article class="sec-item">
+      {% if a.image_url %}<img class="sec-img" src="{{ a.image_url }}" alt="" loading="lazy" onerror="this.remove()">{% endif %}
+      <span class="kicker">{{ a.section }}{% if source_names.get(a.source_id) %} · {{ source_names[a.source_id] }}{% endif %}</span>
+      <h3><a href="/article/{{ a.id }}">{{ a.display_title }}</a></h3>
+      <p>{{ a.display_summary|truncate(160) }}</p>
+    </article>
+    {% endfor %}
+  </section>
+  {% endif %}
+</main>
+
+{% if sections %}
+<div class="rule-thick"></div>
+<div class="sections">
+  {% for section, items in sections.items() %}
+  <section class="section-col" id="sek{{ loop.index }}">
+    <h4 class="section-head">{{ section }}</h4>
+    {% for a in items %}
+    <article class="body-item{% if a.image_url %} has-img{% endif %}">
+      {% if a.image_url %}<img class="body-img" src="{{ a.image_url }}" alt="" loading="lazy" onerror="this.remove()">{% endif %}
+      <h5><a href="/article/{{ a.id }}">{{ a.display_title }}</a></h5>
+      {% if source_names.get(a.source_id) %}<span class="src-tag">{{ source_names[a.source_id] }}</span>{% endif %}
+      <p>{{ a.display_summary|truncate(120) }}</p>
+    </article>
+    {% endfor %}
+  </section>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% endif %}
+
+<div class="more-link">
+  <a href="/more">Flere saker →</a>
+</div>
+
+{% if is_admin %}
+<section class="feedback">
+  <h4>Til redaktøren</h4>
+  <p class="feedback-hint">Skriv hva du vil ha mer eller mindre av — f.eks. «mer klima og vitenskap, færre meningsinnlegg». Profilen justeres og avisa bygges på nytt.</p>
+  <form action="/feedback" method="post">
+    <input type="text" name="feedback" placeholder="Din tilbakemelding …" required>
+    <button type="submit">Send</button>
+  </form>
+</section>
+{% endif %}
+
+<script>
+(function () {
+  const strip = document.getElementById('status-strip');
+  const msgEl = document.getElementById('status-msg');
+  const elEl = document.getElementById('status-elapsed');
+  const fill = document.getElementById('status-fill');
+  const building = document.getElementById('building');
+  const bMsg = building && document.getElementById('building-msg');
+  const bDetail = building && document.getElementById('building-detail');
+  const bFill = building && document.getElementById('building-fill');
+  const current = {{ edition.id if edition else 'null' }};
+  const secs = v => (v ? Math.round(v) + ' s' : '');
+
+  const pctOf = d => {
+    if (d.last_duration > 0) return Math.min(99, d.elapsed / d.last_duration * 100);
+    if (d.steps) return Math.min(95, (d.step - 1) / d.steps * 100 + 8);
+    return 5;
+  };
+  const etaOf = d => {
+    if (d.last_duration > 0) {
+      const rem = Math.round(d.last_duration - d.elapsed);
+      return rem > 1 ? `~${rem} s igjen` : 'snart ferdig …';
+    }
+    return '';
+  };
+
+  async function tick() {
+    let again = true;
+    try {
+      const d = await (await fetch('/status', { cache: 'no-store' })).json();
+      if (d.running) {
+        strip.hidden = false;
+        const step = d.steps ? `Steg ${d.step}/${d.steps} · ` : '';
+        const eta = etaOf(d);
+        const pct = pctOf(d);
+        msgEl.textContent = step + d.message + (d.detail ? ' — ' + d.detail : '');
+        elEl.textContent = secs(d.elapsed) + (eta ? ' · ' + eta : '');
+        fill.style.width = pct + '%';
+        if (building) {
+          bMsg.textContent = step + d.message;
+          bDetail.textContent = (d.detail || '…') +
+            (d.elapsed ? '  ·  ' + secs(d.elapsed) + (eta ? ' · ' + eta : '') : '');
+          bFill.style.width = pct + '%';
+        }
+      } else {
+        if (building && d.has_edition) { location.reload(); return; }
+        if (current !== null && d.edition_id && d.edition_id !== current) {
+          strip.hidden = false;
+          strip.classList.add('done');
+          fill.style.width = '100%';
+          msgEl.textContent = 'Ny utgave klar';
+          elEl.innerHTML = '<a href="/">Vis →</a>';
+          again = false; // terminal: slutt å polle
+        } else {
+          strip.hidden = true;
+        }
+      }
+    } catch (e) { /* nettverksfeil — prøv igjen */ }
+    if (again) setTimeout(tick, 1500);
+  }
+  tick();
+})();
+</script>
+{% endblock %}
