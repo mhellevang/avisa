@@ -152,6 +152,34 @@ Reading (the front page, articles, "more stories") is always open. The admin sur
 If `ADMIN_PASSWORD` is empty, everything is open (fine locally / behind a VPN). The
 cookie is a signed HMAC token (stdlib, no extra dependencies, no server state).
 
+## Single user (by design)
+
+Avisa is intentionally **single-tenant**: one paper, one editorial profile, one set of
+sources, one shared admin password. There is no user/account model — `Source`, `Article`,
+`Edition` and `Setting` are global, and the background pipeline builds **one** edition for
+the whole instance. This matches the purpose: a *personal* morning paper.
+
+Multi-user is deliberately **not** supported. True multi-tenancy would mean accounts +
+password hashing, a `user_id` on every table with per-user query scoping, and per-user
+curation/translation/build — which also multiplies the (paid) LLM cost roughly linearly
+per user. That's a different product than a personal newspaper.
+
+**If you want to share it with a few people**, run **one instance per person** instead of
+adding multi-tenancy — it's far simpler and fully isolated:
+
+```bash
+# Per person: own database + own settings, passed as env vars
+# (pydantic-settings reads real env vars in addition to .env). A distinct
+# DATABASE_URL gives a fully separate paper, sources and preferences.
+OPENROUTER_API_KEY=sk-or-alice ADMIN_PASSWORD=alice-secret \
+  DATABASE_URL=sqlite:///./alice.db \
+  uvicorn app.main:app --port 8001
+```
+
+The cleanest isolation is **one directory (or container) per person**, each with its own
+`.env` and `avisa.db`. With Docker, give each person their own compose project (`-p alice`)
+and data volume. Each instance keeps its own paper, preferences and login.
+
 ## Adding sources
 
 Edit `sources.yaml` and delete `avisa.db` (or the volume) to re-seed. Types:
