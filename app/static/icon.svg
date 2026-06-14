@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Full-bleed background (maskable-safe): brand accent -->
+  <rect width="512" height="512" fill="#7a2b1d"/>
+  <!-- Newspaper "page", kept within the central safe zone -->
+  <g>
+    <rect x="146" y="120" width="220" height="272" rx="10" fill="#f4efe6"/>
+    <!-- Nameplate -->
+    <rect x="170" y="150" width="172" height="30" rx="3" fill="#7a2b1d"/>
+    <!-- Double rule under the nameplate -->
+    <rect x="170" y="190" width="172" height="4" fill="#1a1714"/>
+    <rect x="170" y="198" width="172" height="2" fill="#1a1714"/>
+    <!-- Two columns of body lines -->
+    <g fill="#4a443d">
+      <rect x="170" y="214" width="78" height="7" rx="2"/>
+      <rect x="170" y="230" width="78" height="7" rx="2"/>
+      <rect x="170" y="246" width="78" height="7" rx="2"/>
+      <rect x="170" y="262" width="78" height="7" rx="2"/>
+      <rect x="170" y="278" width="60" height="7" rx="2"/>
+
+      <rect x="264" y="214" width="78" height="7" rx="2"/>
+      <rect x="264" y="230" width="78" height="7" rx="2"/>
+      <rect x="264" y="246" width="78" height="7" rx="2"/>
+      <rect x="264" y="262" width="78" height="7" rx="2"/>
+      <rect x="264" y="278" width="60" height="7" rx="2"/>
+    </g>
+    <!-- Column divider -->
+    <rect x="255" y="214" width="2" height="71" fill="#cbbfa9"/>
+    <!-- A lead headline near the bottom -->
+    <rect x="170" y="306" width="172" height="12" rx="3" fill="#1a1714"/>
+    <rect x="170" y="328" width="140" height="9" rx="2" fill="#4a443d"/>
+  </g>
+</svg>
