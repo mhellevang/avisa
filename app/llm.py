@@ -320,11 +320,13 @@ def translate_body(title: str, content: str, target: str = "English") -> Optiona
     body = content[: settings.translate_body_max_chars]
     system = (
         f"You are a professional translator. Translate to natural {target}. "
-        f"Keep proper nouns and paragraph structure. If the text is already in "
-        f"{target}, return it unchanged. Do not add comments."
+        f"Keep proper nouns and paragraph structure. Preserve markdown formatting "
+        f"exactly — leave '#' heading markers and line breaks in place, translating "
+        f"only the text. If the text is already in {target}, return it unchanged. "
+        f"Do not add comments."
     )
     user = (
-        f"Translate the body below to {target}. Keep line breaks. "
+        f"Translate the body below to {target}. Keep line breaks and markdown headings. "
         'Respond ONLY with JSON: {"content": "<body>"}\n\n'
         f"TITLE (context): {title}\n"
         f"BODY:\n{body}"

@@ -1,4 +1,5 @@
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import quote
@@ -30,6 +31,62 @@ def domain(url: str) -> str:
         return ""
 
 
+_MD_LINK = re.compile(r"\[([^\]]+)\]\((https?://[^\s)]+)\)")
+_MD_BOLD = re.compile(r"\*\*(.+?)\*\*")
+_MD_ITALIC = re.compile(r"(?<![\*\w])\*(?!\s)(.+?)(?<!\s)\*(?!\*)")
+_MD_CODE = re.compile(r"`([^`]+)`")
+
+
+def _inline_md(text: str) -> str:
+    """Renders inline markdown in already-HTML-escaped text: links, bold,
+    italic, inline code. Only http(s) links are turned into anchors."""
+    text = _MD_LINK.sub(
+        lambda m: f'<a href="{m.group(2)}" target="_blank" rel="noopener">{m.group(1)}</a>',
+        text,
+    )
+    text = _MD_BOLD.sub(r"<strong>\1</strong>", text)
+    text = _MD_ITALIC.sub(r"<em>\1</em>", text)
+    text = _MD_CODE.sub(r"<code>\1</code>", text)
+    return text
+
+
+def body_html(md: str) -> str:
+    """Renders the stored body to HTML. Handles a small markdown subset: '##'
+    headings, '-'/'*' bullet lists, and inline bold/italic/code/links. Each
+    non-blank line is its own paragraph — trafilatura never wraps a paragraph
+    across lines, and this is robust to bodies that separate paragraphs with a
+    single newline (older plain-text extraction) as well as blank lines. All
+    text is escaped before markdown is applied, so source HTML can't leak."""
+    if not md:
+        return ""
+    html: list[str] = []
+    items: list[str] = []
+
+    def flush_list():
+        if items:
+            lis = "".join(f"<li>{_inline_md(escape(i))}</li>" for i in items)
+            html.append(f"<ul>{lis}</ul>")
+            items.clear()
+
+    for raw in md.split("\n"):
+        line = raw.strip()
+        if not line:
+            flush_list()
+            continue
+        if line.startswith("#"):
+            flush_list()
+            level = len(line) - len(line.lstrip("#"))
+            tag = "h2" if level <= 2 else "h3"
+            html.append(f"<{tag}>{_inline_md(escape(line.lstrip('#').strip()))}</{tag}>")
+        elif line[:2] in ("- ", "* "):
+            items.append(line[2:].strip())
+        else:
+            flush_list()
+            html.append(f"<p>{_inline_md(escape(line))}</p>")
+    flush_list()
+    return "".join(html)
+
+
 def _ui_lang() -> str:
     return i18n.ui_lang(runtime_config.paper_lang())
 
@@ -48,6 +105,7 @@ templates.env.globals["domain"] = domain
 templates.env.globals["paper_title"] = runtime_config.paper_title
 templates.env.globals["t"] = t
 templates.env.globals["ui_lang"] = _ui_lang
+templates.env.globals["body_html"] = body_html
 
 
 def _latest_edition_items(s):
@@ -226,9 +284,7 @@ def article_body(article_id: int):
             s.commit()
             s.refresh(a)
         body = a.content_no or a.content or ""
-    paras = [p.strip() for p in body.split("\n") if p.strip()]
-    html = "".join(f"<p>{escape(p)}</p>" for p in paras)
-    return JSONResponse({"html": html})
+    return JSONResponse({"html": body_html(body)})
 
 
 @router.get("/more", response_class=HTMLResponse)

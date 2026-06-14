@@ -22,9 +22,7 @@
   {% if bodytext %}
     {% if body_pending %}<p class="translating" id="translating-note">{{ t("Translating the article …") }}</p>{% endif %}
     <div class="body-text" id="body-text"{% if body_pending %} data-translate-url="/article/{{ a.id }}/body"{% endif %}>
-      {% for para in bodytext.split('\n') if para.strip() %}
-      <p>{{ para }}</p>
-      {% endfor %}
+      {{ body_html(bodytext)|safe }}
     </div>
     {% if body_pending %}
     <script>
