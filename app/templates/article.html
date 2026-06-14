@@ -20,11 +20,31 @@
 
   {% set bodytext = a.content_no or a.content %}
   {% if bodytext %}
-    <div class="body-text">
+    {% if body_pending %}<p class="translating" id="translating-note">Oversetter brødteksten til norsk …</p>{% endif %}
+    <div class="body-text" id="body-text"{% if body_pending %} data-translate-url="/article/{{ a.id }}/body"{% endif %}>
       {% for para in bodytext.split('\n') if para.strip() %}
       <p>{{ para }}</p>
       {% endfor %}
     </div>
+    {% if body_pending %}
+    <script>
+      (function () {
+        var el = document.getElementById('body-text');
+        var note = document.getElementById('translating-note');
+        var url = el && el.getAttribute('data-translate-url');
+        if (!url) return;
+        fetch(url, { method: 'POST' })
+          .then(function (r) { return r.json(); })
+          .then(function (d) {
+            if (d && d.html) { el.innerHTML = d.html; }
+            if (note) { note.remove(); }
+          })
+          .catch(function () {
+            if (note) { note.textContent = 'Kunne ikke oversette — viser originalteksten.'; }
+          });
+      })();
+    </script>
+    {% endif %}
   {% endif %}
 
   <p class="source-link">

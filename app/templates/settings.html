@@ -69,6 +69,10 @@
         <input type="number" name="poll_minutes" min="1" max="1440" value="{{ poll_minutes_val }}">
       </label>
     </div>
+    <label>Språk som ikke oversettes (komma-separerte koder)
+      <input type="text" name="skip_langs" value="{{ skip_langs_val }}" placeholder="no, en">
+      <span class="settings-hint">Saker fra kilder på disse språkene vises på originalspråk. «no» er med fordi norsk ikke trenger oversettelse — legg til «en» hvis du leser engelsk fint selv.</span>
+    </label>
     <button type="submit">Lagre</button>
   </form>
 </section>
@@ -76,13 +80,18 @@
 <section class="settings-block">
   <h3>Kilder</h3>
   <table class="sources-table">
-    <thead><tr><th>Navn</th><th>Type</th><th>Seksjon</th><th>Status</th><th></th></tr></thead>
+    <thead><tr><th>Navn</th><th>Type</th><th>Seksjon</th><th>Språk</th><th>Status</th><th></th></tr></thead>
     <tbody>
       {% for src in sources %}
       <tr class="{{ 'src-off' if not src.enabled }}">
         <td><span class="src-name">{{ src.name }}</span><br><span class="src-url">{{ src.url }}</span></td>
         <td>{{ src.kind }}</td>
         <td>{{ src.section }}</td>
+        <td>
+          <form action="/sources/{{ src.id }}/lang" method="post" class="lang-form">
+            <input type="text" name="lang" value="{{ src.lang }}" maxlength="5" size="3" onchange="this.form.requestSubmit()" title="Språkkode, f.eks. no eller en">
+          </form>
+        </td>
         <td>{{ 'På' if src.enabled else 'Av' }}</td>
         <td class="src-actions">
           <form action="/sources/{{ src.id }}/toggle" method="post"><button type="submit">{{ 'Skru av' if src.enabled else 'Skru på' }}</button></form>
@@ -90,7 +99,7 @@
         </td>
       </tr>
       {% else %}
-      <tr><td colspan="5" class="empty">Ingen kilder ennå.</td></tr>
+      <tr><td colspan="6" class="empty">Ingen kilder ennå.</td></tr>
       {% endfor %}
     </tbody>
   </table>
@@ -117,6 +126,7 @@
           </select>
         </label>
         <label>Seksjon <input type="text" name="section" value="Nyheter"></label>
+        <label>Språk <input type="text" name="lang" value="en" maxlength="5" size="3" title="Språkkode, f.eks. no eller en"></label>
       </div>
       <label>URL <input type="url" name="url" required></label>
       <label>Config (JSON, valgfritt — f.eks. <code>{"link_selector": "a.article"}</code> for playwright)

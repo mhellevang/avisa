@@ -9,7 +9,7 @@ from .build import build_edition
 from .content import fetch_new_content, fetch_selected_content
 from .curate import curate
 from .ingest import ingest
-from .translate import translate
+from .translate import translate, translate_pool_headlines
 
 
 def run_pipeline() -> dict:
@@ -30,6 +30,7 @@ def run_pipeline() -> dict:
 
         progress.stage("translate", "Oversetter til norsk …", 5, N)
         translated = translate()
+        translated += translate_pool_headlines()
 
         progress.stage("build", "Setter sammen utgaven …", 6, N)
         edition_id = build_edition()

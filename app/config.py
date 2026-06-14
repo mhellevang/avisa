@@ -32,6 +32,11 @@ class Settings(BaseSettings):
     translate_concurrency: int = 4  # antall oversettelses-kall som kjøres samtidig
     translate_batch_chars: int = 9000  # maks tegn samlet per batch-kall
     translate_batch_max: int = 5  # maks artikler per batch-kall
+    # Komma-separerte språkkoder som IKKE oversettes (kildens lang matches mot
+    # denne). "no" er med fordi norsk→norsk er bortkastet; legg til "en" e.l. i
+    # innstillinger hvis du leser originalspråket fint selv.
+    translate_skip_langs: str = "no"
+    translate_headlines_limit: int = 80  # maks ferske saker som får foroversatt tittel/ingress
     paper_title: str = "Morgenavisa"
     preferences: str = (
         "Generelle nyheter, teknologi, klima og vitenskap. Vekt på analyse og "

@@ -272,6 +272,68 @@ def translate_batch(items: list[dict]) -> dict[int, dict]:
     return out
 
 
+def translate_headlines_batch(items: list[dict]) -> dict[int, dict]:
+    """Oversetter KUN tittel+ingress for flere artikler i ÉTT kall — billig
+    foroversetting for «flere saker»-lista. items: [{id, title, summary}].
+    Returnerer {id: {title, summary}}. {} uten LLM eller ved feil."""
+    if not enabled() or not items:
+        return {}
+
+    blocks = []
+    for it in items:
+        blocks.append(
+            f"=== ARTIKKEL {it['id']} ===\n"
+            f"TITTEL: {it.get('title', '')}\n"
+            f"INGRESS: {it.get('summary', '')}"
+        )
+    system = (
+        "Du er en profesjonell oversetter. Oversett til naturlig norsk bokmål. "
+        "Behold egennavn. Tekst som alt er på norsk beholdes uendret."
+    )
+    user = (
+        "Oversett tittel og ingress for HVER artikkel under til norsk bokmål, "
+        "og behold id-en.\n"
+        'Svar KUN med en JSON-array: '
+        '[{"id": <int>, "title": "<tittel>", "summary": "<ingress>"}]\n\n'
+        + "\n\n".join(blocks)
+    )
+    max_tokens = min(4000, 600 + len(items) * 200)
+    data = _extract_json(_chat(settings.translate_model, system, user, max_tokens=max_tokens))
+    out: dict[int, dict] = {}
+    if isinstance(data, list):
+        for d in data:
+            if isinstance(d, dict) and "id" in d:
+                try:
+                    out[int(d["id"])] = d
+                except (TypeError, ValueError):
+                    continue
+    return out
+
+
+def translate_body(title: str, content: str) -> Optional[str]:
+    """Oversetter KUN brødteksten til norsk bokmål (tittel som kontekst).
+    Returnerer teksten, eller None uten LLM / ved feil. Brukt ved åpning av
+    saker som ikke alt er foroversatt."""
+    if not enabled() or not content:
+        return None
+    body = content[: settings.translate_body_max_chars]
+    system = (
+        "Du er en profesjonell oversetter. Oversett til naturlig norsk bokmål. "
+        "Behold egennavn og avsnittsinndeling. Hvis teksten alt er på norsk, "
+        "returner den uendret. Ikke legg til kommentarer."
+    )
+    user = (
+        "Oversett brødteksten under til norsk bokmål. Behold linjeskift. "
+        'Svar KUN med JSON: {"content": "<brødtekst>"}\n\n'
+        f"TITTEL (kontekst): {title}\n"
+        f"BRØDTEKST:\n{body}"
+    )
+    data = _extract_json(_chat(settings.translate_model, system, user, max_tokens=6000))
+    if isinstance(data, dict) and isinstance(data.get("content"), str):
+        return data["content"]
+    return None
+
+
 # --------------------------------------------------------------------------- #
 # Tilbakemelding → revidert redaksjonell profil
 # --------------------------------------------------------------------------- #

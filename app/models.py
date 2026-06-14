@@ -17,6 +17,9 @@ class Source(SQLModel, table=True):
     url: str
     section: str = "Nyheter"
     enabled: bool = True
+    # ISO-språkkode for kildens innhold (f.eks. "no", "en"). Styrer om saker
+    # oversettes: språk i skip-lista (innstillinger) oversettes ikke.
+    lang: str = "en"
     # Fetcher-spesifikk config som JSON-streng (f.eks. link_selector for
     # playwright-listing). None for enkle kilder.
     config: Optional[str] = None

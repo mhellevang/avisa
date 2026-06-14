@@ -12,6 +12,7 @@ DEFAULTS: dict[str, str] = {
     "preferences": settings.preferences,
     "front_page_size": str(settings.front_page_size),
     "poll_minutes": str(settings.poll_minutes),
+    "translate_skip_langs": settings.translate_skip_langs,
 }
 
 
@@ -54,3 +55,14 @@ def front_page_size() -> int:
 
 def poll_minutes() -> int:
     return _as_int("poll_minutes", settings.poll_minutes)
+
+
+def skip_langs() -> set[str]:
+    """Språkkoder som ikke skal oversettes (kildens lang matches mot denne)."""
+    raw = get("translate_skip_langs")
+    return {p.strip().lower() for p in raw.split(",") if p.strip()}
+
+
+def should_translate(source_lang: str) -> bool:
+    """True hvis en sak fra en kilde med dette språket skal oversettes."""
+    return (source_lang or "").strip().lower() not in skip_langs()

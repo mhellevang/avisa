@@ -6,6 +6,7 @@ from urllib.parse import quote
 from fastapi import APIRouter, BackgroundTasks, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from markupsafe import escape
 from sqlmodel import select
 
 from . import auth, llm, progress, runtime_config, scheduler
@@ -145,20 +146,24 @@ def article(request: Request, article_id: int):
         if not a:
             return HTMLResponse("Fant ikke artikkelen", status_code=404)
 
-        # Oversett ved åpning hvis ikke alt gjort (saker utenfor forsiden er ikke
-        # foroversatt). Caches, så bare første åpning koster.
-        if a.translated_at is None and llm.enabled():
-            res = llm.translate_to_norwegian(a.title, a.summary or "", a.content or "")
+        # Skal saken oversettes? (Kildens språk ikke i skip-lista.)
+        src = s.get(Source, a.source_id)
+        do_translate = llm.enabled() and runtime_config.should_translate(src.lang if src else "")
+
+        # Tittel+ingress oversettes inline hvis det mangler — kort tekst, går
+        # fort. Brødteksten hentes IKKE-blokkerende via /article/{id}/body etter
+        # at siden er vist, så åpningen aldri venter på en full-tekst-oversettelse.
+        if do_translate and a.title_no is None:
+            res = llm.translate_to_norwegian(a.title, a.summary or "")
             if res:
                 a.title_no = res.get("title", a.title)
                 a.summary_no = res.get("summary", a.summary)
-                if a.content:
-                    a.content_no = res.get("content", a.content)
             else:
-                a.title_no, a.summary_no, a.content_no = a.title, a.summary, (a.content or None)
-            a.translated_at = utcnow()
+                a.title_no, a.summary_no = a.title, a.summary
             s.commit()
             s.refresh(a)
+
+        body_pending = do_translate and bool(a.content) and a.content_no is None
 
         # Forrige/neste innenfor nyeste utgave, så man kan bla som i en avis.
         ed = s.exec(select(Edition).order_by(Edition.id.desc())).first()
@@ -194,8 +199,33 @@ def article(request: Request, article_id: int):
             "prev_item": prev_item,
             "next_item": next_item,
             "read_min": read_min,
+            "body_pending": body_pending,
         },
     )
+
+
+@router.post("/article/{article_id}/body")
+def article_body(article_id: int):
+    """Oversetter brødteksten på forespørsel og returnerer den som HTML-avsnitt.
+    Kalles av artikkelsiden etter render, så åpningen ikke blokkeres. Caches
+    (content_no + translated_at), så bare første gang koster."""
+    with get_session() as s:
+        a = s.get(Article, article_id)
+        if not a:
+            return JSONResponse({"error": "ikke funnet"}, status_code=404)
+        src = s.get(Source, a.source_id)
+        do_translate = llm.enabled() and runtime_config.should_translate(src.lang if src else "")
+        if do_translate and a.content and a.content_no is None:
+            translated = llm.translate_body(a.display_title, a.content)
+            a.content_no = translated or a.content
+            if a.translated_at is None:
+                a.translated_at = utcnow()
+            s.commit()
+            s.refresh(a)
+        body = a.content_no or a.content or ""
+    paras = [p.strip() for p in body.split("\n") if p.strip()]
+    html = "".join(f"<p>{escape(p)}</p>" for p in paras)
+    return JSONResponse({"html": html})
 
 
 @router.get("/more", response_class=HTMLResponse)
@@ -292,6 +322,7 @@ def settings_page(request: Request, saved: int = 0, msg: str = ""):
             "preferences_val": runtime_config.preferences(),
             "front_page_size_val": runtime_config.front_page_size(),
             "poll_minutes_val": runtime_config.poll_minutes(),
+            "skip_langs_val": runtime_config.get("translate_skip_langs"),
             "provider_label": llm.provider_label(),
             "llm_enabled": llm.enabled(),
             "saved": bool(saved),
@@ -308,12 +339,16 @@ def settings_save(
     preferences: str = Form(...),
     front_page_size: int = Form(...),
     poll_minutes: int = Form(...),
+    skip_langs: str = Form(""),
 ):
     runtime_config.set_value("paper_title", paper_title.strip())
     runtime_config.set_value("preferences", preferences.strip())
     runtime_config.set_value("front_page_size", str(max(1, front_page_size)))
     poll = max(1, poll_minutes)
     runtime_config.set_value("poll_minutes", str(poll))
+    # Normaliser til komma-separerte, små språkkoder.
+    langs = ",".join(p.strip().lower() for p in skip_langs.replace(" ", ",").split(",") if p.strip())
+    runtime_config.set_value("translate_skip_langs", langs)
     scheduler.reschedule(poll)
     return RedirectResponse(url="/settings?saved=1", status_code=303)
 
@@ -468,6 +503,7 @@ def source_add(
     kind: str = Form(...),
     url: str = Form(...),
     section: str = Form("Nyheter"),
+    lang: str = Form("en"),
     config: str = Form(""),
 ):
     cfg = None
@@ -485,11 +521,22 @@ def source_add(
                 kind=kind.strip(),
                 url=url.strip(),
                 section=(section.strip() or "Nyheter"),
+                lang=(lang.strip().lower() or "en"),
                 enabled=True,
                 config=cfg,
             )
         )
         s.commit()
+    return RedirectResponse(url="/settings", status_code=303)
+
+
+@router.post("/sources/{source_id}/lang")
+def source_set_lang(source_id: int, lang: str = Form(...)):
+    with get_session() as s:
+        src = s.get(Source, source_id)
+        if src:
+            src.lang = lang.strip().lower() or src.lang
+            s.commit()
     return RedirectResponse(url="/settings", status_code=303)
 
 

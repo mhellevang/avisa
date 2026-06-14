@@ -32,6 +32,7 @@ def seed_sources() -> int:
                     kind=row["kind"],
                     url=row["url"],
                     section=row.get("section", "Nyheter"),
+                    lang=row.get("lang", "en"),
                     enabled=row.get("enabled", True),
                     config=json.dumps(cfg) if cfg else None,
                 )
