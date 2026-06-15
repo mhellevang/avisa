@@ -1,5 +1,9 @@
 # Deploy Avisa to a VPS
 
+> **Setting it up for the first time?** Follow the step-by-step walkthrough in
+> [`SETUP.md`](SETUP.md). This file is the reference (host choice, cost, Cloudflare
+> options, CI internals).
+
 Recommended host: **Hetzner Cloud `CX22`** (2 vCPU, 4 GB RAM, EU). The app needs
 an always-on process (in-process scheduler) and a persistent disk (SQLite), so a
 small always-on VM — not serverless — is the right fit.
