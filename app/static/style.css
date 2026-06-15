@@ -479,6 +479,62 @@ html { scroll-behavior: smooth; }
 .src-actions button { padding: 4px 10px; font-size: 0.72rem; }
 .src-actions .danger { background: var(--accent); border-color: var(--accent); }
 
+/* ---------- Checkboxes: topics, languages, suggested sources ---------- */
+fieldset.topics, fieldset.lang-skip {
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 12px 14px 14px;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+fieldset.topics legend, fieldset.lang-skip legend {
+  font-family: var(--serif);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0 6px;
+}
+.check-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px 16px;
+}
+label.check {
+  flex-direction: row !important;
+  align-items: baseline;
+  gap: 8px;
+  cursor: pointer;
+}
+label.check input { width: auto; padding: 0; flex: none; }
+.refine textarea { margin-top: 2px; }
+.translate-explain {
+  border-left: 3px solid var(--rule);
+  padding: 2px 0 2px 12px;
+  margin: 2px 0;
+}
+.translate-explain p { font-family: var(--serif); font-size: 0.88rem; margin: 0 0 6px; }
+.translate-explain .settings-hint { margin: 0 0 4px; }
+.region-pick { max-width: 680px; margin-bottom: 14px; }
+.region-pick label { flex-direction: row; align-items: baseline; gap: 10px; }
+.sources-grid {
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  margin-bottom: 14px;
+}
+.sources-grid label.check {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 8px;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  padding: 8px 10px;
+}
+.sources-grid label.check input { grid-row: 1 / span 2; align-self: start; margin-top: 3px; }
+.sources-grid label.check.is-added { opacity: 0.6; }
+.sources-grid .src-name { display: block; }
+.src-meta { display: block; font-size: 0.75rem; color: var(--ink-soft); }
+
 /* ---------- Live status ---------- */
 .status-strip {
   display: flex;

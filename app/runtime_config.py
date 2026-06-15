@@ -63,6 +63,12 @@ def paper_lang() -> str:
     return (get("paper_lang") or "no").strip().lower()
 
 
+def topic_keys() -> list[str]:
+    """Editorial topics chosen in onboarding (the profile builder)."""
+    raw = get("profile_topics")
+    return [p.strip() for p in raw.split(",") if p.strip()]
+
+
 def skip_langs() -> set[str]:
     """Source languages the user explicitly wants left untouched (besides the
     target language)."""

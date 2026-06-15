@@ -10,7 +10,7 @@ from fastapi.templating import Jinja2Templates
 from markupsafe import escape
 from sqlmodel import select
 
-from . import auth, i18n, llm, progress, runtime_config, scheduler
+from . import auth, catalog, i18n, llm, progress, runtime_config, scheduler
 from .config import settings
 from .db import get_session
 from .fetchers import discover
@@ -375,8 +375,38 @@ def feedback(background_tasks: BackgroundTasks, feedback: str = Form(...)):
 # --------------------------------------------------------------------------- #
 # Settings
 # --------------------------------------------------------------------------- #
+def _ui_lang() -> str:
+    """The interface language: localized only for UI_LANGS, else English."""
+    pl = runtime_config.paper_lang()
+    return pl if pl in i18n.UI_LANGS else "en"
+
+
+def _label(item: dict) -> str:
+    return item["label_no"] if _ui_lang() == "no" else item["label_en"]
+
+
+def _translate_summary(sources, plang: str, skip: set[str]) -> dict:
+    """What translation will actually do, derived from the sources' languages,
+    the paper language and the skip list. Lets the UI explain it plainly."""
+    translated, kept = set(), set()
+    for src in sources:
+        if not src.enabled:
+            continue
+        sl = (src.lang or "").strip().lower()
+        if not sl or sl == plang:
+            kept.add(sl or plang)
+        elif sl in skip:
+            kept.add(sl)
+        else:
+            translated.add(sl)
+    return {
+        "translated": sorted((c, i18n.lang_label(c)) for c in translated if c),
+        "kept": sorted((c, i18n.lang_label(c)) for c in kept if c),
+    }
+
+
 @router.get("/settings", response_class=HTMLResponse)
-def settings_page(request: Request, saved: int = 0, msg: str = ""):
+def settings_page(request: Request, saved: int = 0, msg: str = "", region: str = ""):
     with get_session() as s:
         sources = s.exec(select(Source).order_by(Source.id)).all()
     plang = runtime_config.paper_lang()
@@ -388,6 +418,28 @@ def settings_page(request: Request, saved: int = 0, msg: str = ""):
     cand.discard("")
     cand.discard(plang)
     skip_options = sorted((c, i18n.lang_label(c)) for c in cand)
+
+    selected_region = (region or runtime_config.get("home_region") or "no").strip().lower()
+    have_urls = {(src.url or "").strip() for src in sources}
+    proposed = [
+        {**c, "label": c["name"], "already": c["url"] in have_urls}
+        for c in catalog.suggested_sources(selected_region)
+    ]
+
+    selected_topics = set(runtime_config.topic_keys())
+    topics = [
+        {"key": t["key"], "label": _label(t), "checked": t["key"] in selected_topics}
+        for t in catalog.TOPICS
+    ]
+    # If the user has a custom free-text profile from before (different from the
+    # default) and hasn't picked topics yet, seed the refinement box with it so
+    # switching to topics doesn't silently drop it.
+    extra_val = runtime_config.get("preferences_extra")
+    if not selected_topics and not extra_val:
+        current = runtime_config.preferences()
+        if current and current != settings.preferences:
+            extra_val = current
+
     return templates.TemplateResponse(
         "settings.html",
         {
@@ -395,6 +447,8 @@ def settings_page(request: Request, saved: int = 0, msg: str = ""):
             "sources": sources,
             "paper_title_val": runtime_config.paper_title(),
             "preferences_val": runtime_config.preferences(),
+            "preferences_extra_val": extra_val,
+            "topics": topics,
             "front_page_size_val": runtime_config.front_page_size(),
             "poll_minutes_val": runtime_config.poll_minutes(),
             "paper_lang_val": plang,
@@ -402,6 +456,11 @@ def settings_page(request: Request, saved: int = 0, msg: str = ""):
             "source_lang_options": [(c, i18n.lang_label(c)) for c in i18n.LANG_NAMES],
             "skip_options": skip_options,
             "skip_langs_set": skip,
+            "translate_summary": _translate_summary(sources, plang, skip),
+            "paper_lang_label": i18n.lang_label(plang),
+            "region_options": [(r["code"], _label(r)) for r in catalog.REGIONS],
+            "selected_region": selected_region,
+            "proposed_sources": proposed,
             "provider_label": llm.provider_label(),
             "llm_enabled": llm.enabled(),
             "saved": bool(saved),
@@ -416,14 +475,24 @@ def settings_page(request: Request, saved: int = 0, msg: str = ""):
 def settings_save(
     background_tasks: BackgroundTasks,
     paper_title: str = Form(...),
-    preferences: str = Form(...),
     front_page_size: int = Form(...),
     poll_minutes: int = Form(...),
+    topics: list[str] = Form(default=[]),
+    preferences_extra: str = Form(""),
     paper_lang: str = Form("no"),
     skip_langs: list[str] = Form(default=[]),
 ):
     runtime_config.set_value("paper_title", paper_title.strip())
-    runtime_config.set_value("preferences", preferences.strip())
+    # Profile is built from the chosen topics plus optional free-text refinement.
+    valid = [t["key"] for t in catalog.TOPICS]
+    chosen = [t for t in topics if t in valid]
+    extra = preferences_extra.strip()
+    built = catalog.build_preferences(chosen, extra)
+    runtime_config.set_value("profile_topics", ",".join(chosen))
+    runtime_config.set_value("preferences_extra", extra)
+    # Don't wipe an existing profile if the user saved with nothing selected.
+    if built:
+        runtime_config.set_value("preferences", built)
     runtime_config.set_value("front_page_size", str(max(1, front_page_size)))
     poll = max(1, poll_minutes)
     runtime_config.set_value("poll_minutes", str(poll))
@@ -601,6 +670,36 @@ def source_discover(query: str = Form(...)):
     else:
         msg = "⚠ " + prop.get("reason", "Couldn't figure out the source.")
     return RedirectResponse(url=f"/settings?msg={quote(msg)}", status_code=303)
+
+
+@router.post("/sources/catalog-add")
+def source_catalog_add(
+    region: str = Form(""),
+    urls: list[str] = Form(default=[]),
+):
+    """Add the checked catalogue sources, skipping any already present."""
+    region = (region or "").strip().lower()
+    if region:
+        runtime_config.set_value("home_region", region)
+    by_url = {c["url"]: c for c in catalog.SOURCES}
+    added = 0
+    with get_session() as s:
+        have = {(src.url or "").strip() for src in s.exec(select(Source)).all()}
+        for u in urls:
+            c = by_url.get(u)
+            if not c or c["url"] in have:
+                continue
+            s.add(
+                Source(
+                    name=c["name"], kind=c["kind"], url=c["url"],
+                    section=c["section"], lang=c["lang"], enabled=True,
+                )
+            )
+            have.add(c["url"])
+            added += 1
+        s.commit()
+    msg = i18n.current("Added {n} sources.", n=added) if added else i18n.current("No new sources added.")
+    return RedirectResponse(url=f"/settings?msg={quote(msg)}#sources", status_code=303)
 
 
 @router.post("/sources/add")

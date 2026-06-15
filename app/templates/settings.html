@@ -57,9 +57,18 @@
     <label>{{ t("Title") }}
       <input type="text" name="paper_title" value="{{ paper_title_val }}" required>
     </label>
-    <label>{{ t("Editorial profile (drives curation)") }}
-      <textarea name="preferences" rows="5" required>{{ preferences_val }}</textarea>
-    </label>
+    <fieldset class="topics">
+      <legend>{{ t("What do you want to read?") }}</legend>
+      <div class="check-grid">
+        {% for tp in topics %}
+        <label class="check"><input type="checkbox" name="topics" value="{{ tp.key }}"{% if tp.checked %} checked{% endif %}> {{ tp.label }}</label>
+        {% endfor %}
+      </div>
+      <label class="refine">{{ t("Fine-tune (optional)") }}
+        <textarea name="preferences_extra" rows="3" placeholder="{{ t('e.g. more long reads, less celebrity and sport') }}">{{ preferences_extra_val }}</textarea>
+      </label>
+      <p class="settings-hint">{{ t("Curation runs against:") }} <em>{{ preferences_val }}</em></p>
+    </fieldset>
     <div class="settings-row">
       <label>{{ t("Front-page stories") }}
         <input type="number" name="front_page_size" min="1" max="60" value="{{ front_page_size_val }}">
@@ -76,6 +85,15 @@
       </select>
       <span class="settings-hint">{{ t("Content is translated to this language, and the interface is shown in it (where localized).") }}</span>
     </label>
+    <div class="translate-explain">
+      <p>{{ t("How translation works:") }} {{ t("the paper is in") }} <strong>{{ paper_lang_label }}</strong>. {{ t("Everything in another language is translated, except the source languages you tick below.") }}</p>
+      {% if translate_summary.translated %}
+      <p class="settings-hint">{{ t("Translated now:") }} {{ translate_summary.translated | map(attribute=1) | join(", ") }}.</p>
+      {% endif %}
+      {% if translate_summary.kept %}
+      <p class="settings-hint">{{ t("Shown in the original:") }} {{ translate_summary.kept | map(attribute=1) | join(", ") }}.</p>
+      {% endif %}
+    </div>
     {% if skip_options %}
     <fieldset class="lang-skip">
       <legend>{{ t("Leave untouched (don't translate these source languages)") }}</legend>
@@ -89,7 +107,7 @@
   </form>
 </section>
 
-<section class="settings-block">
+<section class="settings-block" id="sources">
   <h3>{{ t("Sources") }}</h3>
   <div class="table-scroll">
   <table class="sources-table">
@@ -121,6 +139,31 @@
     </tbody>
   </table>
   </div>
+
+  <h4>{{ t("Suggested sources") }}</h4>
+  <form action="/settings" method="get" class="region-pick">
+    <label>{{ t("Region") }}
+      <select name="region" onchange="this.form.submit()">
+        {% for code, label in region_options %}
+        <option value="{{ code }}"{% if code == selected_region %} selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <span class="settings-hint">{{ t("Global sources are always suggested; pick a region for local ones.") }}</span>
+  </form>
+  <form action="/sources/catalog-add" method="post" class="settings-form catalog-add">
+    <input type="hidden" name="region" value="{{ selected_region }}">
+    <div class="check-grid sources-grid">
+      {% for c in proposed_sources %}
+      <label class="check{{ ' is-added' if c.already }}">
+        <input type="checkbox" name="urls" value="{{ c.url }}"{% if c.already %} checked disabled{% endif %}>
+        <span class="src-name">{{ c.name }}</span>
+        <span class="src-meta">{{ c.section }} · {{ c.lang }}{% if c.already %} · {{ t("added") }}{% endif %}</span>
+      </label>
+      {% endfor %}
+    </div>
+    <button type="submit">{{ t("Add selected") }}</button>
+  </form>
 
   <h4>{{ t("Add a source — just paste a URL or a name") }}</h4>
   <form action="/sources/discover" method="post" class="settings-form smart-add">

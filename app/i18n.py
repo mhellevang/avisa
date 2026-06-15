@@ -176,6 +176,28 @@ CATALOG: dict[str, dict[str, str]] = {
             "f.eks. nrk.no eller https://www.aftenposten.no",
         "Config (JSON, optional)": "Config (JSON, valgfritt)",
         "for playwright": "for playwright",
+        # settings: profile topics
+        "What do you want to read?": "Hva vil du lese?",
+        "Fine-tune (optional)": "Finjuster (valgfritt)",
+        "e.g. more long reads, less celebrity and sport":
+            "f.eks. mer dybdesaker, mindre kjendis og sport",
+        "Curation runs against:": "Kurateringen kjøres mot:",
+        # settings: translation explainer
+        "How translation works:": "Slik fungerer oversettelse:",
+        "the paper is in": "avisa er på",
+        "Everything in another language is translated, except the source languages you tick below.":
+            "Alt på andre språk oversettes, unntatt kildespråkene du huker av under.",
+        "Translated now:": "Oversettes nå:",
+        "Shown in the original:": "Vises i original:",
+        # settings: suggested sources
+        "Suggested sources": "Foreslåtte kilder",
+        "Region": "Region",
+        "Global sources are always suggested; pick a region for local ones.":
+            "Globale kilder foreslås alltid; velg en region for lokale.",
+        "added": "lagt til",
+        "Add selected": "Legg til valgte",
+        "Added {n} sources.": "La til {n} kilder.",
+        "No new sources added.": "Ingen nye kilder lagt til.",
     },
 }
 
