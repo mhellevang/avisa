@@ -64,7 +64,7 @@ OpenRouter key is set. That gives you intelligent curation + Norwegian translati
 for free via your Claude Code subscription. On a server (without `claude`),
 OpenRouter is used.
 
-## Running on a VPS (Hetzner/Fly/Railway etc.)
+## Running on any Docker host
 
 ```bash
 cp .env.example .env        # fill in the key + optionally models/profile
@@ -72,7 +72,18 @@ docker compose up -d --build
 ```
 
 The SQLite database lives in a named volume (`avisa-data`), so the data survives
-restarts and redeploys. Put a reverse proxy (Caddy/nginx) in front for HTTPS.
+restarts and redeploys. For HTTPS, put a reverse proxy (Caddy/nginx) in front, or
+expose it with a Cloudflare Tunnel (no open ports) as in the TrueNAS recipe below.
+
+## Self-hosting on TrueNAS SCALE (recommended)
+
+Have an always-on box at home? Run it there for free (no VPS) via a **Cloudflare
+Tunnel** — no open ports, no reverse proxy, home IP never exposed. Two containers
+(`avisa` + `cloudflared`), defined in `docker-compose.truenas.yml`. Step-by-step:
+`deploy/TRUENAS.md`.
+
+Every push to `main` builds and pushes a fresh image to GHCR
+(`.github/workflows/build.yml`); the box pulls it on its own schedule.
 
 ## Config (.env)
 
