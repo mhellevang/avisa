@@ -13,6 +13,17 @@ def _hash(url: str) -> str:
     return hashlib.sha256(url.encode("utf-8")).hexdigest()[:16]
 
 
+# URL fragments that mark a page as something other than an editorial story:
+#   /live/   — live-blog stubs (NYT/Guardian), just a pointer into a feed
+#   puzzles  — crosswords/games (e.g. New Yorker /puzzles-and-games-dept/),
+#              whose "body" is only clue lists, not prose
+_SKIP_URL_MARKERS = ("/live/", "/puzzles-and-games-dept/", "/crossword/")
+
+
+def _is_non_article(url: str) -> bool:
+    return any(marker in url for marker in _SKIP_URL_MARKERS)
+
+
 def ingest() -> int:
     """Fetches from all active sources, dedupes against url_hash, stores new ones."""
     new_count = 0
@@ -38,9 +49,9 @@ def ingest() -> int:
             for raw in raws:
                 if not raw.url:
                     continue
-                # Live-blog stubs (e.g. NYT/Guardian /live/ pages) carry no real
-                # article body, just a "Here's the latest" pointer into a feed.
-                if "/live/" in raw.url:
+                # Live-blog stubs and puzzle/crossword pages aren't editorial
+                # stories — their "body" is empty or just clue lists. Skip them.
+                if _is_non_article(raw.url):
                     continue
                 h = _hash(raw.url)
                 exists = s.exec(
