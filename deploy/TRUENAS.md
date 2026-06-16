@@ -121,14 +121,23 @@ it**. Bring the new image down to the NAS one of two ways:
   `docker compose -f docker-compose.truenas.yml pull && ... up -d`).
 - **Automatic:** add [Watchtower](https://containrrr.dev/watchtower/) — it polls the
   registry and recreates `avisa` whenever `:latest` changes, so a `git push` reaches
-  the box on its own. Add it to the stack:
+  the box on its own. **Scope it with a label** so it only touches this stack, not
+  every other container on the NAS:
   ```yaml
+    avisa:
+      # ... existing avisa service, plus:
+      labels:
+        - com.centurylinklabs.watchtower.enable=true
+
     watchtower:
       image: containrrr/watchtower
       restart: unless-stopped
       volumes:
         - /var/run/docker.sock:/var/run/docker.sock
-      command: --cleanup --interval 3600   # check hourly, prune old images
+      environment:
+        WATCHTOWER_LABEL_ENABLE: "true"   # only update labelled containers
+        WATCHTOWER_CLEANUP: "true"        # prune old images after updating
+      command: --interval 3600            # check hourly
   ```
   Trade-off: a bad push auto-deploys. Low stakes for a personal paper, but use the
   manual route if you'd rather approve each update.
