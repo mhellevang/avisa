@@ -1,0 +1,34 @@
+# Self-host on TrueNAS SCALE via Cloudflare Tunnel.
+#
+# No reverse proxy, no open ports, no Let's Encrypt: the Cloudflare Tunnel
+# terminates TLS at Cloudflare's edge and forwards plain traffic to the app over
+# the internal compose network. Your home IP is never exposed.
+#
+# This is a standalone stack (it does NOT layer on docker-compose.yml). Deploy it
+# as-is via Dockge/Portainer on TrueNAS SCALE, or `docker compose -f
+# docker-compose.truenas.yml up -d`. See deploy/TRUENAS.md.
+#
+# The SQLite DB is just cached, reproducible news — a plain named volume is fine,
+# no ZFS dataset / snapshots needed. Lose it and the paper rebuilds itself.
+
+services:
+  avisa:
+    image: ghcr.io/mhellevang/avisa:latest
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: sqlite:////data/avisa.db
+    volumes:
+      - avisa-data:/data
+    # No published ports — cloudflared reaches it internally at http://avisa:8000.
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${CF_TUNNEL_TOKEN}
+    depends_on:
+      - avisa
+
+volumes:
+  avisa-data:
