@@ -77,6 +77,13 @@ PREFERENCES=General news, technology, climate and science. Weight on analysis ov
 
 See `.env.example` for every available variable.
 
+> **Set `OPENROUTER_API_KEY` before the first deploy.** If the first edition builds
+> without it, the pipeline runs in demo mode and stamps the curated articles as
+> "translated" with their original (English) text — and never retries them, so the
+> front page stays English even after you add the key. Recovering means wiping the DB
+> volume and rebuilding. Set the key up front and the first edition is curated +
+> translated correctly.
+
 ---
 
 ## 3. Deploy
@@ -106,6 +113,22 @@ teams. Then even reading requires a Cloudflare login; the app's own
 `ADMIN_PASSWORD` still guards the config surfaces underneath.
 
 ## Updating to a new version
-`git push origin main` still builds and pushes a fresh `ghcr.io/mhellevang/avisa:latest`
-via GitHub Actions. To pull it on the NAS, in Dockge/Portainer hit **Pull + Up**
-(or `docker compose -f docker-compose.truenas.yml pull && ... up -d`).
+`git push origin main` builds and pushes a fresh `ghcr.io/mhellevang/avisa:latest`
+via GitHub Actions — but the box sits behind NAT, so **CI can't push the update to
+it**. Bring the new image down to the NAS one of two ways:
+
+- **Manual:** in Dockge/Portainer hit **Pull + Up** (or
+  `docker compose -f docker-compose.truenas.yml pull && ... up -d`).
+- **Automatic:** add [Watchtower](https://containrrr.dev/watchtower/) — it polls the
+  registry and recreates `avisa` whenever `:latest` changes, so a `git push` reaches
+  the box on its own. Add it to the stack:
+  ```yaml
+    watchtower:
+      image: containrrr/watchtower
+      restart: unless-stopped
+      volumes:
+        - /var/run/docker.sock:/var/run/docker.sock
+      command: --cleanup --interval 3600   # check hourly, prune old images
+  ```
+  Trade-off: a bad push auto-deploys. Low stakes for a personal paper, but use the
+  manual route if you'd rather approve each update.

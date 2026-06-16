@@ -73,17 +73,21 @@ docker compose up -d --build
 
 The SQLite database lives in a named volume (`avisa-data`), so the data survives
 restarts and redeploys. For HTTPS, put a reverse proxy (Caddy/nginx) in front, or
-expose it with a Cloudflare Tunnel (no open ports) as in the TrueNAS recipe below.
+expose it with a Cloudflare Tunnel (no open ports) — see below.
 
-## Self-hosting on TrueNAS SCALE (recommended)
+## Self-hosting at home (Cloudflare Tunnel)
 
-Have an always-on box at home? Run it there for free (no VPS) via a **Cloudflare
-Tunnel** — no open ports, no reverse proxy, home IP never exposed. Two containers
-(`avisa` + `cloudflared`), defined in `docker-compose.truenas.yml`. Step-by-step:
-`deploy/TRUENAS.md`.
+Any always-on box you already have — a NAS, a mini-PC, a Raspberry Pi, an old
+laptop — can host this for free via a **Cloudflare Tunnel**: no open ports, no
+reverse proxy, home IP never exposed. The stack is two containers (`avisa` +
+`cloudflared`); see `docker-compose.truenas.yml`. `deploy/TRUENAS.md` is a worked
+example for **TrueNAS SCALE** (deployed through Dockge), but the same compose runs
+on any Docker host.
 
 Every push to `main` builds and pushes a fresh image to GHCR
-(`.github/workflows/build.yml`); the box pulls it on its own schedule.
+(`.github/workflows/build.yml`). Since the box is behind NAT, CI can't push to it —
+update by pulling the new image (in Dockge, or `docker compose pull && up -d`), or
+add [Watchtower](https://containrrr.dev/watchtower/) for hands-off pull-based updates.
 
 ## Config (.env)
 
