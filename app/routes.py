@@ -132,6 +132,10 @@ def front(request: Request):
         ed, items = _latest_edition_items(s)
         source_names = _source_names(s)
 
+    # Pull fresh content when the edition has gone stale (e.g. the app was idle
+    # past the poll interval), so opening the paper isn't stuck on old news.
+    scheduler.refresh_if_stale(ed.built_at if ed else None)
+
     lead = next((a for ei, a in items if ei.slot == "lead"), None)
     secondary = [a for ei, a in items if ei.slot == "secondary"]
     body = [a for ei, a in items if ei.slot == "body"]
