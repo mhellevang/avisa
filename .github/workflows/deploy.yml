@@ -1,12 +1,11 @@
 name: Deploy
 
-# On every push to main: build the image in CI, push it to GHCR, then have the
-# VPS pull it and restart. The server never builds — it only pulls.
-# App secrets (.env) live on the server and never enter CI.
+# Build the image in CI, push it to GHCR, then have the VPS pull it and restart.
+# The server never builds — it only pulls. App secrets (.env) live on the server
+# and never enter CI.
+# Auto-deploy on push is paused; trigger manually via "Run workflow".
 on:
-  push:
-    branches: [main]
-  workflow_dispatch: {}   # allow manual "Run workflow" too
+  workflow_dispatch: {}
 
 concurrency:
   group: deploy-production
