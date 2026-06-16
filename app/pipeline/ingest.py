@@ -38,6 +38,10 @@ def ingest() -> int:
             for raw in raws:
                 if not raw.url:
                     continue
+                # Live-blog stubs (e.g. NYT/Guardian /live/ pages) carry no real
+                # article body, just a "Here's the latest" pointer into a feed.
+                if "/live/" in raw.url:
+                    continue
                 h = _hash(raw.url)
                 exists = s.exec(
                     select(Article).where(Article.url_hash == h)

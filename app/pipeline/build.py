@@ -7,6 +7,17 @@ from ..config import settings
 from ..db import get_session
 from ..models import Article, Edition, EditionItem, utcnow
 
+# Halving time for the recency weight. The LLM relevance score is multiplied by
+# 0.5 ** (age / RECENCY_HALF_LIFE_HOURS) so that a story this old loses half its
+# weight. Keeps relevance in charge while pushing fresher news to the top.
+RECENCY_HALF_LIFE_HOURS = 24.0
+
+
+def _effective_score(a: Article, now) -> float:
+    when = a.published_at or a.fetched_at
+    age_hours = max((now - when).total_seconds() / 3600.0, 0.0)
+    return a.score * (0.5 ** (age_hours / RECENCY_HALF_LIFE_HOURS))
+
 
 def _slot(rank: int) -> str:
     if rank == 0:
@@ -21,9 +32,7 @@ def build_edition() -> Optional[int]:
     is a snapshot — the front page always shows the latest edition."""
     with get_session() as s:
         selected = s.exec(
-            select(Article)
-            .where(Article.selected == True)  # noqa: E712
-            .order_by(Article.score.desc())
+            select(Article).where(Article.selected == True)  # noqa: E712
         ).all()
         # Safety net: a paywall may have been detected after curation.
         if settings.filter_paywalled:
@@ -31,6 +40,9 @@ def build_edition() -> Optional[int]:
         if not selected:
             print("[build] no selected stories — skipping edition")
             return None
+
+        now = utcnow()
+        selected.sort(key=lambda a: _effective_score(a, now), reverse=True)
 
         ed = Edition(built_at=utcnow(), title=runtime_config.paper_title())
         s.add(ed)
