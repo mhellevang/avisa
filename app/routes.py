@@ -51,16 +51,18 @@ def _inline_md(text: str) -> str:
 
 
 def body_html(md: str) -> str:
-    """Renders the stored body to HTML. Handles a small markdown subset: '##'
-    headings, '-'/'*' bullet lists, and inline bold/italic/code/links. Each
-    non-blank line is its own paragraph — trafilatura never wraps a paragraph
-    across lines, and this is robust to bodies that separate paragraphs with a
-    single newline (older plain-text extraction) as well as blank lines. All
-    text is escaped before markdown is applied, so source HTML can't leak."""
+    """Renders the stored body to HTML. Handles a small markdown subset: '```'
+    fenced code blocks, '##' headings, '-'/'*' bullet lists, and inline
+    bold/italic/code/links. Each non-blank line is its own paragraph —
+    trafilatura never wraps a paragraph across lines, and this is robust to
+    bodies that separate paragraphs with a single newline (older plain-text
+    extraction) as well as blank lines. All text is escaped before markdown is
+    applied, so source HTML can't leak."""
     if not md:
         return ""
     html: list[str] = []
     items: list[str] = []
+    code: list[str] | None = None  # accumulating fenced-code lines when not None
 
     def flush_list():
         if items:
@@ -68,7 +70,26 @@ def body_html(md: str) -> str:
             html.append(f"<ul>{lis}</ul>")
             items.clear()
 
+    def flush_code():
+        nonlocal code
+        if code is not None:
+            body = escape("\n".join(code))
+            html.append(f"<pre><code>{body}</code></pre>")
+            code = None
+
     for raw in md.split("\n"):
+        # A '```' fence opens or closes a code block. Inside one, lines are kept
+        # verbatim (indentation preserved, no inline markdown) until the fence.
+        if raw.strip().startswith("```"):
+            if code is None:
+                flush_list()
+                code = []
+            else:
+                flush_code()
+            continue
+        if code is not None:
+            code.append(raw)
+            continue
         line = raw.strip()
         if not line:
             flush_list()
@@ -83,6 +104,7 @@ def body_html(md: str) -> str:
         else:
             flush_list()
             html.append(f"<p>{_inline_md(escape(line))}</p>")
+    flush_code()
     flush_list()
     return "".join(html)
 
