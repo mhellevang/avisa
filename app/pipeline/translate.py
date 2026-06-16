@@ -85,28 +85,30 @@ def translate() -> int:
             progress.detail(current("Translating {done}/{total}", done=min(done, total), total=total))
 
     now = utcnow()
+    translated = 0
     with get_session() as s:
         for t in targets:
+            res = results.get(t["id"])
+            if not res:
+                # Batch failed / no LLM: leave translated_at = None so the article is
+                # retried on the next run instead of freezing the original-language
+                # text in. The UI falls back to the original (display_title, and the
+                # article page translates inline / lazy-loads the body on open).
+                continue
             a = s.get(Article, t["id"])
             if not a:
                 continue
-            res = results.get(t["id"])
-            if res:
-                a.title_no = res.get("title", t["title"])
-                a.summary_no = res.get("summary", t["summary"])
-                if t["content"]:
-                    a.content_no = res.get("content", t["content"])
-            else:
-                # No LLM / failed: keep the original so the UI has something to show.
-                a.title_no = t["title"]
-                a.summary_no = t["summary"]
-                a.content_no = t["content"] or None
+            a.title_no = res.get("title", t["title"])
+            a.summary_no = res.get("summary", t["summary"])
+            if t["content"]:
+                a.content_no = res.get("content", t["content"])
             a.translated_lang = plang
             a.translated_at = now
+            translated += 1
         s.commit()
 
-    print(f"[translate] {total} articles in {len(chunks)} batch(es), {workers} in parallel")
-    return total
+    print(f"[translate] {translated}/{total} translated in {len(chunks)} batch(es), {workers} in parallel")
+    return translated
 
 
 def translate_pool_headlines() -> int:
