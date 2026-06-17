@@ -1,8 +1,40 @@
+import re
 from datetime import datetime
 
 import feedparser
 
 from .base import RawArticle, strip_html
+
+# Trailing boilerplate many feeds append to the <description>: a "read more"
+# link (the Guardian's "Continue reading…") or a WordPress "The post … appeared
+# first on …" footer. Everything from here on is dropped.
+_SUMMARY_TAIL = re.compile(
+    r"\s*(?:"
+    r"Continue reading"
+    r"|Read more"
+    r"|Get our breaking news email"      # Guardian newsletter promo
+    r"|Sign up (?:to|for)\b"
+    r"|Subscribe to\b"
+    r"|The post\b.*?\bappeared first on"  # WordPress footer
+    r").*$",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def clean_summary(text: str, max_chars: int = 300) -> str:
+    """A feed's <description> is often the standfirst *plus* the opening body
+    paragraphs *plus* a 'Continue reading…' link (the Guardian does all three).
+    For a lede we want roughly the standfirst: drop the boilerplate tail, then
+    cap to the first sentence(s) so it doesn't duplicate the body below it."""
+    text = _SUMMARY_TAIL.sub("", text).strip()
+    if len(text) <= max_chars:
+        return text
+    head = text[:max_chars]
+    # Prefer cutting at the last sentence boundary; fall back to a hard cut + ellipsis.
+    cut = max(head.rfind(". "), head.rfind("! "), head.rfind("? "))
+    if cut > 80:
+        return head[: cut + 1].strip()
+    return head.rstrip() + "…"
 
 
 def _extract_image(entry) -> str:
@@ -44,7 +76,7 @@ def fetch_rss(url: str, limit: int = 40) -> list[RawArticle]:
             RawArticle(
                 url=link,
                 title=e.get("title", "(untitled)"),
-                summary=strip_html(e.get("summary", "")),
+                summary=clean_summary(strip_html(e.get("summary", ""))),
                 content=_content(e),
                 author=e.get("author", ""),
                 image_url=_extract_image(e),

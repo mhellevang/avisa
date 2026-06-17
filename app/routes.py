@@ -597,6 +597,31 @@ def debug_refetch(request: Request, article_id: int):
     return JSONResponse(result)
 
 
+@router.post("/debug/backfill-summaries")
+def debug_backfill_summaries(request: Request):
+    """One-off maintenance: re-clean already-stored ledes (strip 'Continue
+    reading…' tails and over-long RSS descriptions) on both the original and the
+    translated summary. New articles are cleaned at ingest; this fixes rows that
+    predate that. Idempotent — safe to run repeatedly."""
+    if not _debug_auth_ok(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    from .fetchers.rss import clean_summary
+
+    scanned = changed = 0
+    with get_session() as s:
+        for a in s.exec(select(Article)).all():
+            scanned += 1
+            new_summary = clean_summary(a.summary or "")
+            new_summary_no = clean_summary(a.summary_no) if a.summary_no else a.summary_no
+            if new_summary != (a.summary or "") or new_summary_no != a.summary_no:
+                a.summary = new_summary
+                if a.summary_no is not None:
+                    a.summary_no = new_summary_no
+                changed += 1
+        s.commit()
+    return JSONResponse({"scanned": scanned, "changed": changed})
+
+
 # --------------------------------------------------------------------------- #
 # Feedback → adjusted profile
 # --------------------------------------------------------------------------- #

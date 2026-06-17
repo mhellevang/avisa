@@ -233,6 +233,27 @@ def curate_articles(
 # --------------------------------------------------------------------------- #
 # Translation
 # --------------------------------------------------------------------------- #
+def _translator_system(target: str, *, markdown: bool = False) -> str:
+    """Shared system prompt for the translation calls. The model otherwise
+    occasionally coins non-words (e.g. "Emergenesen" for "the emergence of") or
+    carries over English forms ("urgensen"); the explicit "no invented words /
+    anglicisms" clause targets exactly that. `markdown=True` adds the
+    formatting-preservation clause for body text."""
+    s = (
+        f"You are a professional translator. Translate into natural, idiomatic {target}. "
+        f"Use only established {target} words — never invent words or word-forms, and "
+        f"never carry over English spellings or anglicisms (translate the meaning, not "
+        f"word by word). Keep proper nouns and paragraph structure. If the text is "
+        f"already in {target}, return it unchanged. Do not add comments."
+    )
+    if markdown:
+        s += (
+            " Preserve markdown formatting exactly — leave '#' heading markers and "
+            "line breaks in place, translating only the text."
+        )
+    return s
+
+
 def translate_fields(
     title: str, summary: str, content: str = "", target: str = "English"
 ) -> Optional[dict]:
@@ -241,11 +262,7 @@ def translate_fields(
     if not enabled():
         return None
     body = (content or "")[: settings.translate_body_max_chars]
-    system = (
-        f"You are a professional translator. Translate to natural {target}. "
-        "Keep proper nouns and paragraph structure. If the text is already in "
-        f"{target}, return it unchanged. Do not add comments."
-    )
+    system = _translator_system(target)
     user = (
         f"Translate the fields below to {target}. Keep line breaks in 'content'. "
         "Respond ONLY with JSON: "
@@ -280,11 +297,7 @@ def translate_batch(items: list[dict], target: str = "English") -> dict[int, dic
             f"LEDE: {it.get('summary', '')}\n"
             f"BODY:\n{body}"
         )
-    system = (
-        f"You are a professional translator. Translate to natural {target}. "
-        f"Keep proper nouns and paragraph structure. Text already in {target} "
-        "is kept unchanged."
-    )
+    system = _translator_system(target)
     user = (
         f"Translate EACH article below to {target}. Keep line breaks in the "
         "body, and keep the id for each article.\n"
@@ -319,10 +332,7 @@ def translate_headlines_batch(items: list[dict], target: str = "English") -> dic
             f"TITLE: {it.get('title', '')}\n"
             f"LEDE: {it.get('summary', '')}"
         )
-    system = (
-        f"You are a professional translator. Translate to natural {target}. "
-        f"Keep proper nouns. Text already in {target} is kept unchanged."
-    )
+    system = _translator_system(target)
     user = (
         f"Translate the title and lede of EACH article below to {target}, "
         "and keep the id.\n"
@@ -350,13 +360,7 @@ def translate_body(title: str, content: str, target: str = "English") -> Optiona
     if not enabled() or not content:
         return None
     body = content[: settings.translate_body_max_chars]
-    system = (
-        f"You are a professional translator. Translate to natural {target}. "
-        f"Keep proper nouns and paragraph structure. Preserve markdown formatting "
-        f"exactly — leave '#' heading markers and line breaks in place, translating "
-        f"only the text. If the text is already in {target}, return it unchanged. "
-        f"Do not add comments."
-    )
+    system = _translator_system(target, markdown=True)
     user = (
         f"Translate the body below to {target}. Keep line breaks and markdown headings. "
         'Respond ONLY with JSON: {"content": "<body>"}\n\n'
