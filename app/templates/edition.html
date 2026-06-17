@@ -3,7 +3,7 @@
 <header class="masthead">
   <div class="masthead-top">
     <span class="folio folio-left">{% if edition %}{{ t("No.") }} {{ edition.id }}{% endif %}</span>
-    <span class="folio folio-mid">{% if edition %}{{ no_date(edition.built_at) }} · {{ t("Evening edition") if edition.built_at.hour >= 14 else t("Morning edition") }}{% endif %}</span>
+    <span class="folio folio-mid">{% if edition %}{{ no_date(edition.built_at) }} · {{ t("Evening edition") if to_local(edition.built_at).hour >= 14 else t("Morning edition") }}{% endif %}</span>
     <span class="masthead-actions">
       {% if auth_enabled and not is_admin %}
         <a href="/login" class="settings-link">{{ t("Log in") }}</a>

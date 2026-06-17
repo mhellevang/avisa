@@ -8,9 +8,32 @@ to any language via LANG_NAMES; the UI falls back to English for languages that
 aren't in CATALOG.
 """
 
+from datetime import timezone
+from zoneinfo import ZoneInfo
+
+from .config import settings
+
 # The source language of the keys below. Strings in this language need no
 # catalog entry — t() returns the key verbatim.
 SOURCE_LANG = "en"
+
+
+def _local_tz():
+    """The paper's display timezone (settings.timezone), falling back to UTC if
+    the name is invalid so a typo never crashes rendering."""
+    try:
+        return ZoneInfo(settings.timezone)
+    except Exception:
+        return timezone.utc
+
+
+def to_local(dt):
+    """Convert a naive-UTC timestamp to aware local time. Stored times are naive
+    UTC everywhere (models.utcnow, the fetchers); this is the single place the
+    display layer converts, so readers see their wall clock instead of UTC."""
+    if dt is None:
+        return None
+    return dt.replace(tzinfo=timezone.utc).astimezone(_local_tz())
 
 # code -> (label shown in the picker, name used in the LLM translation prompt).
 LANG_NAMES: dict[str, tuple[str, str]] = {
@@ -221,6 +244,7 @@ def fmt_date(dt, lang: str) -> str:
     'mandag 3. juni 2026'. Empty string for None."""
     if not dt:
         return ""
+    dt = to_local(dt)
     lang = lang if lang in _MONTHS else SOURCE_LANG
     day, month = _DAYS[lang][dt.weekday()], _MONTHS[lang][dt.month - 1]
     if lang == "no":
@@ -232,6 +256,7 @@ def fmt_datetime(dt, lang: str) -> str:
     """Short date + time, e.g. '3 June at 14:30' / '3. juni kl. 14:30'."""
     if not dt:
         return ""
+    dt = to_local(dt)
     lang = lang if lang in _MONTHS else SOURCE_LANG
     month = _MONTHS[lang][dt.month - 1]
     clock = dt.strftime("%H:%M")
