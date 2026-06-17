@@ -4,6 +4,8 @@ Run by the scheduler in the background, and can be triggered manually from the w
 Each step is idempotent enough to be run again.
 """
 
+import threading
+
 from .. import i18n, progress
 from .build import build_edition
 from .content import fetch_new_content, fetch_selected_content
@@ -11,8 +13,27 @@ from .curate import curate
 from .ingest import ingest
 from .translate import translate, translate_pool_headlines
 
+# A single pipeline run at a time. run_pipeline is triggered from many places
+# (scheduler, the refresh/feedback/settings/configure routes, first-boot, and
+# the stale-edition kick on page load). Two concurrent runs would clobber the
+# shared progress state and contend on the same SQLite file. This lock makes a
+# run a no-op while another is in flight; the scheduler's coalesce/max_instances
+# and the stale-kick debounce reduce how often that happens, but don't cover the
+# route triggers — this does.
+_run_lock = threading.Lock()
+
 
 def run_pipeline() -> dict:
+    if not _run_lock.acquire(blocking=False):
+        print("[pipeline] already running — skipping this trigger")
+        return {"skipped": True}
+    try:
+        return _run_pipeline()
+    finally:
+        _run_lock.release()
+
+
+def _run_pipeline() -> dict:
     N = 6  # number of steps, shown as "Step x/6"
     progress.begin()
     try:

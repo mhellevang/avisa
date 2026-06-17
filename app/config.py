@@ -61,6 +61,10 @@ class Settings(BaseSettings):
     admin_password: str = ""
     # Secret for cookie signing (falls back to admin_password).
     session_secret: str = ""
+    # Mark the login cookie Secure (HTTPS-only). Leave false for plain-HTTP
+    # localhost; set true when served over TLS (e.g. behind a Cloudflare Tunnel),
+    # so the browser never sends the admin cookie over cleartext HTTP.
+    cookie_secure: bool = False
 
 
 settings = Settings()

@@ -3,8 +3,15 @@ If the password is empty, auth is disabled and everything is open — fine
 locally / behind a VPN.
 
 The cookie is an HMAC token derived from the secret, so it cannot be forged
-without knowing the password/SESSION_SECRET. Stateless, no extra
-dependencies."""
+without knowing the password/SESSION_SECRET. Stateless, no extra dependencies.
+
+Note the deliberate limits of this model: make_token() is a CONSTANT for a given
+secret — there is no per-login nonce, no server-side session, and no expiry in
+the token itself (only the cookie's max_age). So the token can't be revoked
+short of rotating SESSION_SECRET/ADMIN_PASSWORD, and anyone who ever obtains the
+cookie keeps access until then. That's an accepted trade-off for a single-user
+paper behind TLS/VPN — set COOKIE_SECURE=true when served over HTTPS so the
+cookie is never sent in cleartext."""
 
 import hashlib
 import hmac

@@ -207,6 +207,7 @@ def login_submit(password: str = Form(...), next: str = Form("/settings")):
             auth.make_token(),
             httponly=True,
             samesite="lax",
+            secure=settings.cookie_secure,
             max_age=60 * 60 * 24 * 30,
         )
         return resp
@@ -631,12 +632,6 @@ def feedback(background_tasks: BackgroundTasks, feedback: str = Form(...)):
 # --------------------------------------------------------------------------- #
 # Settings
 # --------------------------------------------------------------------------- #
-def _ui_lang() -> str:
-    """The interface language: localized only for UI_LANGS, else English."""
-    pl = runtime_config.paper_lang()
-    return pl if pl in i18n.UI_LANGS else "en"
-
-
 def _label(item: dict) -> str:
     return item["label_no"] if _ui_lang() == "no" else item["label_en"]
 
