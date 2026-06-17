@@ -19,6 +19,11 @@ class Settings(BaseSettings):
     # Local Claude session (claude CLI). Empty model = the CLI's default model.
     claude_model: str = ""
 
+    # IANA timezone the paper's timestamps are displayed in. Stored times are
+    # naive UTC everywhere (see models.utcnow); only the display layer converts.
+    # Set to your local zone so dates/clock match your wall clock, not UTC.
+    timezone: str = "Europe/Oslo"
+
     # Pipeline / paper
     poll_minutes: int = 30
     front_page_size: int = 12

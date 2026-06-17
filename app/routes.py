@@ -128,6 +128,9 @@ templates.env.globals["paper_title"] = runtime_config.paper_title
 templates.env.globals["t"] = t
 templates.env.globals["ui_lang"] = _ui_lang
 templates.env.globals["body_html"] = body_html
+# Naive-UTC timestamp -> the paper's local timezone, for the morning/evening
+# label and any other place a template needs the local wall-clock hour.
+templates.env.globals["to_local"] = i18n.to_local
 
 
 def _latest_edition_items(s):
