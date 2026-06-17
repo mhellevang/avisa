@@ -6,6 +6,7 @@ is kept). With a key, the LLM is used.
 """
 
 import json
+import re
 import shutil
 import subprocess
 from typing import Optional
@@ -233,6 +234,29 @@ def curate_articles(
 # --------------------------------------------------------------------------- #
 # Translation
 # --------------------------------------------------------------------------- #
+_CODE_FENCE = re.compile(r"```.*?```", re.S)
+
+
+def _mask_code(text: str) -> tuple[str, list[str]]:
+    """Replaces fenced code blocks with sentinels before translation so the
+    model never rewrites code (translating identifiers, reflowing lines, …).
+    Returns the masked text and the removed blocks, restored with _restore_code.
+    """
+    blocks: list[str] = []
+
+    def repl(m: "re.Match") -> str:
+        blocks.append(m.group(0))
+        return f"⟦CODE{len(blocks) - 1}⟧"
+
+    return _CODE_FENCE.sub(repl, text), blocks
+
+
+def _restore_code(text: str, blocks: list[str]) -> str:
+    for i, block in enumerate(blocks):
+        text = text.replace(f"⟦CODE{i}⟧", block)
+    return text
+
+
 def _translator_system(target: str, *, markdown: bool = False) -> str:
     """Shared system prompt for the translation calls. The model otherwise
     occasionally coins non-words (e.g. "Emergenesen" for "the emergence of") or
@@ -244,7 +268,8 @@ def _translator_system(target: str, *, markdown: bool = False) -> str:
         f"Use only established {target} words — never invent words or word-forms, and "
         f"never carry over English spellings or anglicisms (translate the meaning, not "
         f"word by word). Keep proper nouns and paragraph structure. If the text is "
-        f"already in {target}, return it unchanged. Do not add comments."
+        f"already in {target}, return it unchanged. Do not add comments. "
+        f"Leave any ⟦CODE…⟧ placeholders exactly as they are."
     )
     if markdown:
         s += (
@@ -261,7 +286,8 @@ def translate_fields(
     key / the call fails. The body is capped to keep the cost down."""
     if not enabled():
         return None
-    body = (content or "")[: settings.translate_body_max_chars]
+    masked, code_blocks = _mask_code(content or "")
+    body = masked[: settings.translate_body_max_chars]
     system = _translator_system(target)
     user = (
         f"Translate the fields below to {target}. Keep line breaks in 'content'. "
@@ -275,6 +301,8 @@ def translate_fields(
     max_tokens = 6000 if body else 1200
     data = _extract_json(_chat(settings.translate_model, system, user, max_tokens=max_tokens))
     if isinstance(data, dict) and "title" in data:
+        if isinstance(data.get("content"), str):
+            data["content"] = _restore_code(data["content"], code_blocks)
         return data
     return None
 
@@ -359,7 +387,8 @@ def translate_body(title: str, content: str, target: str = "English") -> Optiona
     stories that aren't pre-translated yet."""
     if not enabled() or not content:
         return None
-    body = content[: settings.translate_body_max_chars]
+    masked, code_blocks = _mask_code(content)
+    body = masked[: settings.translate_body_max_chars]
     system = _translator_system(target, markdown=True)
     user = (
         f"Translate the body below to {target}. Keep line breaks and markdown headings. "
@@ -369,7 +398,7 @@ def translate_body(title: str, content: str, target: str = "English") -> Optiona
     )
     data = _extract_json(_chat(settings.translate_model, system, user, max_tokens=6000))
     if isinstance(data, dict) and isinstance(data.get("content"), str):
-        return data["content"]
+        return _restore_code(data["content"], code_blocks)
     return None
 
 

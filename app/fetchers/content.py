@@ -98,7 +98,11 @@ def _extract_text(html: str, url: str) -> Optional[str]:
             html,
             url=url,
             include_comments=False,
-            include_tables=False,
+            # Keep tables and links — the body renderer turns markdown tables
+            # into <table> and [text](url) into anchors. With url= passed,
+            # trafilatura resolves relative links to absolute.
+            include_tables=True,
+            include_links=True,
             # favor_precision drops surrounding page chrome (nav, "Fork", "Copy
             # link", "Metadata" on e.g. GitHub) that favor_recall keeps. Pages
             # that under-extract fall through to the Playwright pass.
