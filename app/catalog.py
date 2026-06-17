@@ -122,15 +122,16 @@ SOURCES: list[dict] = [
 ]
 
 
-def topic_phrases(keys: list[str]) -> list[str]:
-    by_key = {t["key"]: t for t in TOPICS}
+def topic_phrases(keys: list[str], topics: list[dict] | None = None) -> list[str]:
+    by_key = {t["key"]: t for t in (topics if topics is not None else TOPICS)}
     return [by_key[k]["phrase"] for k in keys if k in by_key]
 
 
-def build_preferences(topic_keys: list[str], extra: str = "") -> str:
+def build_preferences(topic_keys: list[str], extra: str = "", topics: list[dict] | None = None) -> str:
     """Compose the profile text curation runs against, from chosen topics plus
-    optional free-text refinement."""
-    phrases = topic_phrases(topic_keys)
+    optional free-text refinement. Pass `topics` to include custom topics beyond
+    the built-in TOPICS."""
+    phrases = topic_phrases(topic_keys, topics)
     parts: list[str] = []
     if phrases:
         if len(phrases) == 1:

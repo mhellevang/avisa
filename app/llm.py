@@ -466,6 +466,7 @@ def interpret_config(
     poll_minutes: int,
     history: Optional[list] = None,
     target: str = "English",
+    topics: Optional[list] = None,
 ) -> Optional[dict]:
     """Interprets a user's free-text config message into {reply, actions}.
     'reply' is a natural reply to the user in the target language `target`;
@@ -476,6 +477,7 @@ def interpret_config(
     src_list = "\n".join(
         f'- "{s.name}" ({s.kind}, {"on" if s.enabled else "off"})' for s in sources
     ) or "(no sources yet)"
+    topic_list = ", ".join(t["key"] for t in (topics or [])) or "(none)"
     transcript = ""
     for m in (history or [])[-6:]:
         who = "User" if m.get("role") == "user" else "Assistant"
@@ -492,6 +494,7 @@ def interpret_config(
         f"in {target} ('reply') and which changes to make ('actions').\n\n"
         f"SOURCES:\n{src_list}\n\n"
         f"PROFILE: {preferences}\n"
+        f"EDITORIAL TOPICS (checkbox keys): {topic_list}\n"
         f"TITLE: {title} · FRONT_PAGE_SIZE: {front_page_size} · "
         f"POLL_MIN: {poll_minutes}\n\n"
         + (f"CONVERSATION SO FAR:\n{transcript}\n" if transcript else "")
@@ -506,11 +509,17 @@ def interpret_config(
         '{"action":"set_preferences","value":"<the whole new profile>"}\n'
         '{"action":"set_title","value":"<title>"}\n'
         '{"action":"set_front_page_size","value":<integer>}\n'
-        '{"action":"set_poll_minutes","value":<integer>}\n\n'
-        "Rules: For more/less of topics, use set_preferences with an updated "
-        "profile that KEEPS what still applies. Use exact source names from "
-        "SOURCES. If the message is a question, answer in 'reply' and leave "
-        "'actions' as []."
+        '{"action":"set_poll_minutes","value":<integer>}\n'
+        '{"action":"add_topic","key":"<short-slug>","label":"<short label>","phrase":"<curation phrase in English>"}\n'
+        '{"action":"remove_topic","key":"<existing topic key>"}\n\n'
+        "Rules: For more/less of an EXISTING topic (see EDITORIAL TOPICS), use "
+        "set_preferences with an updated profile that KEEPS what still applies. "
+        "When the reader asks for a NEW kind of coverage they don't have a topic "
+        "for yet, use add_topic: a short lowercase slug key, a short label in "
+        f"{target}, and a concise English curation phrase (e.g. 'space "
+        "exploration and astronomy'). Don't duplicate an existing topic key. Use "
+        "exact source names from SOURCES. If the message is a question, answer in "
+        "'reply' and leave 'actions' as []."
     )
     # One retry — the CLI can occasionally deviate from the format.
     for _ in range(2):
