@@ -48,6 +48,7 @@ CATALOG: dict[str, dict[str, str]] = {
         "demo mode: no LLM — raw curation, untranslated":
             "demo-modus: ingen LLM — råkuratert, uoversatt",
         "Top stories": "Toppsaker",
+        "In brief": "Kort fortalt",
         "More stories": "Flere saker",
         "More stories →": "Flere saker →",
         "To the editor": "Til redaktøren",

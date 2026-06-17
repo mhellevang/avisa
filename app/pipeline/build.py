@@ -19,12 +19,22 @@ def _effective_score(a: Article, now) -> float:
     return a.score * (0.5 ** (age_hours / RECENCY_HALF_LIFE_HOURS))
 
 
+# Editorial slot budget (openpaper's "assign editorial weight" idea). Size
+# follows the LLM's own ranking (score), reconciled into a fixed budget so the
+# layout is stable regardless of how the model labels things: one lead, a few
+# majors (secondary), the mid body, then a compact "brief" tail.
+SECONDARY_BUDGET = 3  # majors after the lead
+MID_BUDGET = 6        # mid-weight body stories before the brief tail
+
+
 def _slot(rank: int) -> str:
     if rank == 0:
         return "lead"
-    if rank <= 3:
+    if rank <= SECONDARY_BUDGET:
         return "secondary"
-    return "body"
+    if rank <= SECONDARY_BUDGET + MID_BUDGET:
+        return "body"
+    return "brief"
 
 
 def build_edition() -> Optional[int]:

@@ -161,6 +161,7 @@ def front(request: Request):
     lead = next((a for ei, a in items if ei.slot == "lead"), None)
     secondary = [a for ei, a in items if ei.slot == "secondary"]
     body = [a for ei, a in items if ei.slot == "body"]
+    briefs = [a for ei, a in items if ei.slot == "brief"]
 
     # Group body stories by section for a newspaper-like layout.
     sections: dict[str, list[Article]] = {}
@@ -175,6 +176,7 @@ def front(request: Request):
             "lead": lead,
             "secondary": secondary,
             "sections": sections,
+            "briefs": briefs,
             "source_names": source_names,
             "llm_enabled": llm.enabled(),
             "provider_label": llm.provider_label(),
@@ -380,19 +382,30 @@ def status():
 # --------------------------------------------------------------------------- #
 # Feedback → adjusted profile
 # --------------------------------------------------------------------------- #
+def _append_feedback(current: str, lines: list[str]) -> str:
+    """Appends dated feedback lines under a `## Feedback` heading, creating the
+    heading if the profile doesn't have one yet. The curator reads these dated
+    signals and applies them with weights and time decay during curation."""
+    body = (current or "").rstrip()
+    if "## Feedback" not in body:
+        body = f"{body}\n\n## Feedback" if body else "## Feedback"
+    return body + "\n" + "\n".join(lines)
+
+
 @router.post("/feedback")
 def feedback(background_tasks: BackgroundTasks, feedback: str = Form(...)):
     feedback = feedback.strip()
     if feedback:
         current = runtime_config.preferences()
-        revised = llm.revise_preferences(
-            current, feedback, target=i18n.lang_prompt_name(runtime_config.paper_lang())
-        )
-        if revised:
-            runtime_config.set_value("preferences", revised)
+        today = utcnow().date().isoformat()
+        # Turn the free text into structured editorial signals (more/less/love/
+        # hide + topic). Falls back to recording the raw note verbatim.
+        signals = llm.classify_feedback(feedback)
+        if signals:
+            lines = [f"- {today} · {s['signal']}: {s['topic']}" for s in signals]
         else:
-            # Without an LLM: add the feedback as a note in the profile.
-            runtime_config.set_value("preferences", f"{current}\n- {feedback}")
+            lines = [f"- {today} · note: {feedback}"]
+        runtime_config.set_value("preferences", _append_feedback(current, lines))
         # Rebuild the paper with the adjusted profile.
         background_tasks.add_task(run_pipeline)
     return RedirectResponse(url="/", status_code=303)

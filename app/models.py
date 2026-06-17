@@ -47,6 +47,7 @@ class Article(SQLModel, table=True):
     score: float = 0.0
     selected: bool = False
     curate_reason: str = ""
+    deck: str = ""  # one-line editorial subtitle, set during curation for the lead/major stories
 
     # Translation into the paper's target language. The column names
     # historically use "_no", but the content is in whatever language
