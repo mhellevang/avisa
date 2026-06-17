@@ -379,6 +379,220 @@ def status():
     return JSONResponse(snap)
 
 
+# ---------------------------------------------------------------------------
+# Debug surface: inspect why an article looks off, and re-run a single one
+# through translation / full-text fetch to test a fix without rebuilding the
+# whole edition. Gated behind ADMIN_PASSWORD; pass it as the `X-Admin-Key`
+# header or `?key=` so it can be called over the Cloudflare tunnel without any
+# host / Docker access. When no password is set, it's open (same as the rest
+# of the admin surface locally).
+# ---------------------------------------------------------------------------
+
+
+def _debug_auth_ok(request: Request) -> bool:
+    if not auth.auth_enabled():
+        return True
+    if auth.is_authed(request):  # logged-in cookie
+        return True
+    key = request.headers.get("X-Admin-Key") or request.query_params.get("key", "")
+    return auth.check_password(key)
+
+
+def _iso(dt):
+    return dt.isoformat() if dt else None
+
+
+def _article_debug(s, a: Article, full: bool = False) -> dict:
+    """Full pipeline trace for one article: original vs. translated text, all
+    curation/translation metadata, source config, and the derived flags that
+    decide how it's rendered. `full` returns whole bodies; otherwise excerpts."""
+    src = s.get(Source, a.source_id)
+    plang = runtime_config.paper_lang()
+    do_translate = llm.enabled() and runtime_config.should_translate(src.lang if src else "")
+
+    placement = None
+    ed = s.exec(select(Edition).order_by(Edition.id.desc())).first()
+    if ed:
+        ei = s.exec(
+            select(EditionItem).where(
+                EditionItem.edition_id == ed.id,
+                EditionItem.article_id == a.id,
+            )
+        ).first()
+        if ei:
+            placement = {"edition_id": ed.id, "rank": ei.rank, "slot": ei.slot}
+
+    def body(value):
+        value = value or ""
+        return value if full else value[:2000]
+
+    return {
+        "id": a.id,
+        "url": a.url,
+        "section": a.section,
+        "source": {
+            "id": src.id,
+            "name": src.name,
+            "kind": src.kind,
+            "lang": src.lang,
+            "section": src.section,
+        } if src else None,
+        "original": {
+            "title": a.title,
+            "summary": a.summary,
+            "content": body(a.content),
+            "content_len": len(a.content or ""),
+        },
+        "translated": {
+            "title": a.title_no,
+            "summary": a.summary_no,
+            "content": body(a.content_no),
+            "content_len": len(a.content_no or ""),
+            "lang": a.translated_lang,
+            "at": _iso(a.translated_at),
+        },
+        "curation": {
+            "score": a.score,
+            "selected": a.selected,
+            "reason": a.curate_reason,
+            "deck": a.deck,
+        },
+        "content_meta": {
+            "attempted": a.content_fetched_at is not None,
+            "fetched_at": _iso(a.content_fetched_at),
+            "paywalled": a.paywalled,
+            "image_url": a.image_url,
+        },
+        "timestamps": {
+            "published_at": _iso(a.published_at),
+            "fetched_at": _iso(a.fetched_at),
+        },
+        "computed": {
+            "paper_lang": plang,
+            "llm_enabled": llm.enabled(),
+            "do_translate": do_translate,
+            "needs_body_translation": bool(do_translate and a.content and a.content_no is None),
+        },
+        "edition_placement": placement,
+        "truncated": (not full) and (
+            len(a.content or "") > 2000 or len(a.content_no or "") > 2000
+        ),
+    }
+
+
+@router.get("/debug/article/{article_id}")
+def debug_article(request: Request, article_id: int, full: int = 0):
+    """Dump the full pipeline trace for one article. `?full=1` for whole bodies."""
+    if not _debug_auth_ok(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    with get_session() as s:
+        a = s.get(Article, article_id)
+        if not a:
+            return JSONResponse({"error": "not found"}, status_code=404)
+        return JSONResponse(_article_debug(s, a, full=bool(full)))
+
+
+@router.get("/debug/articles")
+def debug_articles(
+    request: Request,
+    q: str = "",
+    selected: int | None = None,
+    untranslated: int = 0,
+    paywalled: int | None = None,
+    limit: int = 50,
+):
+    """Compact list to locate the odd one. Filters: q (title substring),
+    selected=0/1, untranslated=1, paywalled=0/1."""
+    if not _debug_auth_ok(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    limit = max(1, min(limit, 200))
+    ql = q.lower()
+    out = []
+    with get_session() as s:
+        src_names = _source_names(s)
+        rows = s.exec(select(Article).order_by(Article.fetched_at.desc())).all()
+        for a in rows:
+            if selected is not None and a.selected != bool(selected):
+                continue
+            if untranslated and a.title_no is not None:
+                continue
+            if paywalled is not None and a.paywalled != bool(paywalled):
+                continue
+            if ql and ql not in (a.title or "").lower() and ql not in (a.title_no or "").lower():
+                continue
+            out.append({
+                "id": a.id,
+                "source": src_names.get(a.source_id, ""),
+                "section": a.section,
+                "title": a.display_title,
+                "selected": a.selected,
+                "score": a.score,
+                "translated_lang": a.translated_lang,
+                "translated": a.title_no is not None,
+                "content_len": len(a.content or ""),
+                "paywalled": a.paywalled,
+                "fetched_at": _iso(a.fetched_at),
+                "url": a.url,
+            })
+            if len(out) >= limit:
+                break
+    return JSONResponse({"count": len(out), "articles": out})
+
+
+@router.post("/debug/article/{article_id}/retranslate")
+def debug_retranslate(request: Request, article_id: int):
+    """Re-run translation for one article synchronously (clears the cache and
+    re-translates title/summary/body), then return the fresh trace. Lets you
+    test a translation-prompt fix on a single article."""
+    if not _debug_auth_ok(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    if not llm.enabled():
+        return JSONResponse({"error": "llm not enabled (no API key)"}, status_code=400)
+    with get_session() as s:
+        a = s.get(Article, article_id)
+        if not a:
+            return JSONResponse({"error": "not found"}, status_code=404)
+        plang = runtime_config.paper_lang()
+        target = i18n.lang_prompt_name(plang)
+        fields = llm.translate_fields(a.title, a.summary or "", target=target)
+        if fields:
+            a.title_no = fields.get("title", a.title)
+            a.summary_no = fields.get("summary", a.summary)
+        else:
+            a.title_no, a.summary_no = a.title, a.summary
+        if a.content:
+            translated = llm.translate_body(a.display_title, a.content, target=target)
+            a.content_no = translated or a.content
+        a.translated_lang = plang
+        a.translated_at = utcnow()
+        s.commit()
+        s.refresh(a)
+        return JSONResponse(_article_debug(s, a, full=True))
+
+
+@router.post("/debug/article/{article_id}/refetch")
+def debug_refetch(request: Request, article_id: int):
+    """Re-run full-text extraction for one article (static + Playwright
+    fallback) and write it back, then return the fresh trace. Lets you test why
+    the body came out odd."""
+    if not _debug_auth_ok(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    with get_session() as s:
+        a = s.get(Article, article_id)
+        if not a:
+            return JSONResponse({"error": "not found"}, status_code=404)
+        url = a.url
+    # Local import: pulls in the browser stack, keep it off the module load path.
+    from .pipeline.content import _run_fetch
+
+    got = _run_fetch([(article_id, url)])
+    with get_session() as s:
+        a = s.get(Article, article_id)
+        result = _article_debug(s, a, full=True)
+    result["refetch_got_text"] = bool(got)
+    return JSONResponse(result)
+
+
 # --------------------------------------------------------------------------- #
 # Feedback → adjusted profile
 # --------------------------------------------------------------------------- #
