@@ -1,0 +1,78 @@
+/* "Living newspaper" texture — a lean port of openpaper's magic.css, tuned for
+   Avisa's warm light/dark palette. Only the effects we actually use:
+   animated paper grain, a halftone print-screen over the lead photo, and an
+   ink-draw reveal for the nameplate. Decorative only — everything degrades to
+   plain when prefers-reduced-motion is set, and the base state is always the
+   finished (visible) state so a frozen/offscreen render shows real content. */
+
+/* ---------- paper grain (subtle, animated) ---------- */
+.grain { position: relative; }
+.grain::after {
+  content: "";
+  position: absolute;
+  inset: 0;               /* stay inside the box — no overflow, so a sticky
+                             descendant (the section nav) keeps working */
+  pointer-events: none;
+  z-index: 60;
+  opacity: 0.38;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.4'/%3E%3C/svg%3E");
+  /* Flicker via background-position so the layer never extends past the box. */
+  animation: grainShift 1.2s steps(3) infinite;
+}
+/* On the dark palette, multiply would just darken to mud — screen it lightly. */
+:root[data-theme="dark"] .grain::after { mix-blend-mode: screen; opacity: 0.22; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .grain::after { mix-blend-mode: screen; opacity: 0.22; }
+}
+@keyframes grainShift {
+  0%   { background-position: 0 0; }
+  33%  { background-position: -7px 5px; }
+  66%  { background-position: 5px -7px; }
+  100% { background-position: 0 0; }
+}
+
+/* ---------- halftone print screen (over a photo) ---------- */
+.halftone { position: relative; }
+.halftone::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  pointer-events: none;
+  mix-blend-mode: multiply;
+  opacity: 0.4;
+  background-image: radial-gradient(circle at center, rgba(0,0,0,0.85) 0 32%, transparent 34%);
+  background-size: 3px 3px;
+}
+:root[data-theme="dark"] .halftone::before { mix-blend-mode: screen; opacity: 0.28; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .halftone::before { mix-blend-mode: screen; opacity: 0.28; }
+}
+
+/* ---------- ink-draw reveal (writes itself once, then settles) ----------
+   Base state is VISIBLE. The write-on is gated behind a `.inked` ancestor that
+   a tiny script adds via double-rAF, so it only animates when actually painting. */
+.ink { display: inline-block; clip-path: inset(0 0 0 0); }
+.inked .ink {
+  animation: inkWrite 1.5s cubic-bezier(.6,.02,.3,1) 0.2s forwards;
+}
+@keyframes inkWrite {
+  from { clip-path: inset(0 100% 0 0); filter: blur(0.6px); }
+  to   { clip-path: inset(0 0 0 0);    filter: blur(0); }
+}
+
+/* ---------- reveal-on-load for the lead block ---------- */
+.rise { animation: rise 0.9s cubic-bezier(.2,.7,.3,1) both; }
+@keyframes rise {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .grain::after, .halftone::before, .ink, .rise {
+    animation: none !important;
+  }
+  .ink { clip-path: none !important; }
+  .grain::after { display: none; }
+}

@@ -14,10 +14,23 @@ def _hash(url: str) -> str:
 
 
 # URL fragments that mark a page as something other than an editorial story:
-#   /live/   — live-blog stubs (NYT/Guardian), just a pointer into a feed
+#   /live/, /liveblog/ — live-blog stubs (NYT/Guardian/Al Jazeera), just a
+#                        pointer into a feed
+#   /video/, /videos/  — video pages (e.g. Al Jazeera /video/newsfeed/, BBC
+#                        /news/videos/): the substance is the clip, the "body"
+#                        is only a one-line caption
 #   puzzles  — crosswords/games (e.g. New Yorker /puzzles-and-games-dept/),
 #              whose "body" is only clue lists, not prose
-_SKIP_URL_MARKERS = ("/live/", "/puzzles-and-games-dept/", "/crossword/")
+#   /cartoons/ — New Yorker daily cartoon, whose "body" is just the caption
+_SKIP_URL_MARKERS = (
+    "/live/",
+    "/liveblog/",
+    "/video/",
+    "/videos/",
+    "/puzzles-and-games-dept/",
+    "/crossword/",
+    "/cartoons/",
+)
 
 
 def _is_non_article(url: str) -> bool:

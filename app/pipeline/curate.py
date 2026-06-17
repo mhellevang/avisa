@@ -7,7 +7,7 @@ from ..config import settings
 from ..db import get_session
 from ..i18n import current, lang_prompt_name
 from ..llm import curate_articles
-from ..models import Article, utcnow
+from ..models import Article, Source, utcnow
 
 
 def curate() -> int:
@@ -47,11 +47,14 @@ def curate() -> int:
             if skipped:
                 print(f"[curate] skipped {skipped} behind paywall")
 
+        source_names = {src.id: src.name for src in s.exec(select(Source)).all()}
         ranked = curate_articles(
             rankable,
             runtime_config.preferences(),
             runtime_config.front_page_size(),
             target=lang_prompt_name(runtime_config.paper_lang()),
+            source_names=source_names,
+            today=utcnow().date().isoformat(),
         )
         by_id = {a.id: a for a in candidates}
 
@@ -67,6 +70,7 @@ def curate() -> int:
                 a.score = 0.5
             a.section = r.get("section") or a.section
             a.curate_reason = r.get("reason", "")
+            a.deck = r.get("deck", "") or ""
             chosen += 1
 
         s.commit()

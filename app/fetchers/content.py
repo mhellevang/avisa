@@ -71,6 +71,25 @@ def _clean_markdown(md: str) -> str:
     return "\n".join(cleaned).strip()
 
 
+def _dedupe_blocks(md: str) -> str:
+    """Drops verbatim-repeated paragraphs, keeping the first occurrence.
+    Some pages (notably video/teaser pages) render the same headline + caption
+    twice, so trafilatura returns it doubled — which can push thin non-articles
+    past the content_min_chars guard. Comparison ignores leading '#' and
+    whitespace so a heading and its repeat count as the same block."""
+    blocks = re.split(r"\n\s*\n", md)
+    seen: set[str] = set()
+    out: list[str] = []
+    for block in blocks:
+        key = block.strip().lstrip("#").strip().lower()
+        if key and key in seen:
+            continue
+        if key:
+            seen.add(key)
+        out.append(block)
+    return "\n\n".join(out).strip()
+
+
 def _extract_text(html: str, url: str) -> Optional[str]:
     if not html:
         return None
@@ -90,7 +109,7 @@ def _extract_text(html: str, url: str) -> Optional[str]:
         return None
     if not text:
         return None
-    return _clean_markdown(text) or None
+    return _dedupe_blocks(_clean_markdown(text)) or None
 
 
 def _og_image(html: str, url: str) -> Optional[str]:

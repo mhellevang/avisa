@@ -16,7 +16,7 @@
       {% endif %}
     </span>
   </div>
-  <h1 class="nameplate">{{ paper_title() }}</h1>
+  <h1 class="nameplate"><span class="ink">{{ paper_title() }}</span></h1>
   <p class="motto">{{ t("All worth knowing, before your coffee") }}</p>
   <div class="masthead-rule">
     {% if edition %}{{ t("Updated") }} {{ no_datetime(edition.built_at) }} <span class="edition-age" data-built="{{ edition.built_at.isoformat() }}"></span>{% else %}{{ t("Building the first edition …") }}{% endif %}
@@ -62,9 +62,10 @@
 <main class="frontpage" id="topp">
   {% if lead %}
   <article class="lead">
-    {% if lead.image_url %}<img class="lead-img" src="{{ lead.image_url }}" alt="" loading="lazy" onerror="this.remove()">{% endif %}
+    {% if lead.image_url %}<span class="lead-figure halftone"><img class="lead-img" src="{{ lead.image_url }}" alt="" loading="lazy" onerror="this.closest('.lead-figure').remove()"></span>{% endif %}
     <span class="kicker">{{ lead.section }}{% if source_names.get(lead.source_id) %} · {{ source_names[lead.source_id] }}{% endif %}</span>
     <h2><a href="/article/{{ lead.id }}">{{ lead.display_title }}</a></h2>
+    {% if lead.deck %}<p class="deck">{{ lead.deck }}</p>{% endif %}
     <p class="ingress">{{ lead.display_summary }}</p>
     {% if lead.curate_reason %}<p class="reason">{{ lead.curate_reason }}</p>{% endif %}
   </article>
@@ -77,6 +78,7 @@
       {% if a.image_url %}<img class="sec-img" src="{{ a.image_url }}" alt="" loading="lazy" onerror="this.remove()">{% endif %}
       <span class="kicker">{{ a.section }}{% if source_names.get(a.source_id) %} · {{ source_names[a.source_id] }}{% endif %}</span>
       <h3><a href="/article/{{ a.id }}">{{ a.display_title }}</a></h3>
+      {% if a.deck %}<p class="deck">{{ a.deck }}</p>{% endif %}
       <p>{{ a.display_summary|truncate(160) }}</p>
     </article>
     {% endfor %}
@@ -101,6 +103,22 @@
   </section>
   {% endfor %}
 </div>
+{% endif %}
+
+{% if briefs %}
+<section class="briefs">
+  <h4 class="briefs-head">{{ t("In brief") }}</h4>
+  <ul>
+    {% for a in briefs %}
+    <li>
+      <a href="/article/{{ a.id }}">
+        <span class="brief-kicker">{{ a.section }}</span>
+        <span class="brief-title">{{ a.display_title }}</span>
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
 {% endif %}
 
 {% endif %}

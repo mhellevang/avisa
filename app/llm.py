@@ -142,9 +142,15 @@ def _extract_json(text: Optional[str]):
 # --------------------------------------------------------------------------- #
 # Curation
 # --------------------------------------------------------------------------- #
-def curate_articles(articles, preferences: str, n: int, target: str = "English") -> list[dict]:
-    """Returns a list of {id, score, section, reason} for the selected stories.
-    Section names and reasons are written in the target language `target`."""
+def curate_articles(
+    articles, preferences: str, n: int, target: str = "English",
+    source_names: Optional[dict] = None, today: str = "",
+) -> list[dict]:
+    """Returns a list of {id, score, section, reason, deck} for the selected
+    stories. Section names, reasons and decks are written in `target`.
+    `source_names` maps source_id -> name so the editor can honour the
+    source-diversity cap and is included in the candidate listing."""
+    source_names = source_names or {}
     # Sort by recency and cap to a sensible number of candidates.
     cands = sorted(
         articles,
@@ -160,34 +166,60 @@ def curate_articles(articles, preferences: str, n: int, target: str = "English")
                 "score": round(1.0 - i * 0.01, 3),
                 "section": a.section,
                 "reason": i18n.current("Latest story (no LLM key set)"),
+                "deck": "",
             }
             for i, a in enumerate(top)
         ]
 
+    def _src(a) -> str:
+        return source_names.get(a.source_id, "") or "?"
+
     listing = "\n".join(
-        f"{a.id}\t[{a.section}] {a.title} — {(a.summary or '')[:180]}" for a in cands
+        f"{a.id}\t[{a.section} · {_src(a)}] {a.title} — {(a.summary or '')[:180]}"
+        for a in cands
     )
     system = (
         "You are an experienced news editor assembling a personal morning paper "
-        "for a single reader. You pick the most important and relevant stories, "
-        "avoid duplicates, and ensure a balanced mix of sections."
+        "for a single reader. You pick the most important and relevant stories "
+        "and compose a balanced, varied front page — not just the loudest topic."
     )
     user = (
         f"The reader's editorial profile:\n{preferences}\n\n"
-        f"Pick the {n} best stories from the candidate list below. Rank them, "
-        f"give each a score between 0 and 1, place them in a suitable section "
-        f"(e.g. World, Domestic, Technology, Science, Climate, Economy, Culture), "
-        f"and give a short reason. Write section names and reasons in {target}.\n\n"
-        f"Candidates (id<TAB>text):\n{listing}\n\n"
+        f"Pick the {n} best stories from the candidate list below and rank them "
+        f"(best first). For each, give a score between 0 and 1, place it in a "
+        f"suitable section (e.g. World, Domestic, Technology, Science, Climate, "
+        f"Economy, Culture), and give a short reason it was chosen.\n\n"
+        f"Composition rules (balance, don't just take the top scorers):\n"
+        f"- No single topic/section may exceed ~30% of the selection.\n"
+        f"- No single source may exceed ~40% of the selection.\n"
+        f"- Reserve roughly 20% for worthwhile discoveries outside the reader's "
+        f"stated interests, so the paper isn't an echo chamber.\n"
+        f"- Cover at least 3 distinct sections.\n"
+        f"- Avoid near-duplicate stories about the same event.\n\n"
+        + (
+            f"The profile may include a `## Feedback` section with dated signals "
+            f"(more/less/love/hide + a topic) and free notes. Today is {today}. "
+            f"Apply them when ranking: 'love' strongly boosts that topic, 'more' "
+            f"boosts it, 'less' reduces it, 'hide' excludes that topic/source "
+            f"entirely. Weight recent feedback fully, halve it for signals older "
+            f"than 30 days, and quarter it beyond 90 days.\n\n"
+            if today else ""
+        )
+        + f"For the few most important stories (the likely lead and majors), also "
+        f"write a one-sentence `deck` — an editorial subtitle that adds context "
+        f"beyond the headline. Leave `deck` an empty string for minor stories.\n\n"
+        f"Write section names, reasons and decks in {target}.\n\n"
+        f"Candidates (id<TAB>[section · source] title — summary):\n{listing}\n\n"
         f'Respond ONLY with JSON of the form: '
-        f'[{{"id": <int>, "score": <0-1>, "section": "<str>", "reason": "<str>"}}]'
+        f'[{{"id": <int>, "score": <0-1>, "section": "<str>", "reason": "<str>", "deck": "<str>"}}]'
     )
-    data = _extract_json(_chat(settings.curate_model, system, user, max_tokens=2500))
+    data = _extract_json(_chat(settings.curate_model, system, user, max_tokens=3000))
     if not isinstance(data, list):
         # Fallback if the LLM responds oddly.
         top = cands[:n]
         return [
-            {"id": a.id, "score": 0.5, "section": a.section, "reason": i18n.current("Fallback selection")}
+            {"id": a.id, "score": 0.5, "section": a.section,
+             "reason": i18n.current("Fallback selection"), "deck": ""}
             for a in top
         ]
     # Clean up and cap.
@@ -359,6 +391,38 @@ def revise_preferences(current: str, feedback: str, target: str = "English") -> 
     )
     out = _chat(settings.curate_model, system, user, max_tokens=600)
     return out.strip() if out else None
+
+
+def classify_feedback(feedback: str) -> list[dict]:
+    """Turns the reader's free-text feedback into structured editorial signals
+    the curator can apply with weights and time decay. Returns a list of
+    {"signal": "more"|"less"|"love"|"hide", "topic": "<short topic/source>"}.
+    Returns [] without an LLM or if nothing concrete could be extracted."""
+    if not enabled():
+        return []
+    system = (
+        "You convert a newspaper reader's free-text feedback into structured "
+        "editorial signals. Signals: 'more' (want more of a topic), 'less' "
+        "(want less), 'love' (strong positive), 'hide' (never show this "
+        "topic/source). The topic is a short noun phrase or source name in the "
+        "reader's own language."
+    )
+    user = (
+        f"Reader feedback:\n{feedback}\n\n"
+        "Extract every signal it expresses (there may be several). "
+        'Respond ONLY with JSON of the form: '
+        '[{"signal": "more|less|love|hide", "topic": "<short>"}]. '
+        "If it expresses no concrete preference, respond with []."
+    )
+    data = _extract_json(_chat(settings.curate_model, system, user, max_tokens=400))
+    if not isinstance(data, list):
+        return []
+    valid = {"more", "less", "love", "hide"}
+    out = []
+    for r in data:
+        if isinstance(r, dict) and r.get("signal") in valid and r.get("topic"):
+            out.append({"signal": r["signal"], "topic": str(r["topic"]).strip()})
+    return out
 
 
 # --------------------------------------------------------------------------- #
