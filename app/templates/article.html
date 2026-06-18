@@ -5,13 +5,9 @@
   <a class="back" href="/">← {{ paper_title() }}</a>
 </header>
 
-<article class="single" id="article-main" data-view="translated">
+<article class="single">
   <span class="kicker">{{ a.section }}{% if source_name %} · {{ source_name }}{% endif %}</span>
-  {% if show_toggle %}
-  <button type="button" id="lang-toggle-btn" class="lang-toggle" aria-pressed="false"
-          data-label-orig="{{ t('Show original') }}" data-label-tr="{{ t('Show translation') }}">{{ t('Show original') }}</button>
-  {% endif %}
-  <h1>{% if show_toggle %}<span class="v-tr">{{ a.display_title }}</span><span class="v-or">{{ a.title }}</span>{% else %}{{ a.display_title }}{% endif %}</h1>
+  <h1>{{ a.display_title }}</h1>
   <p class="byline">
     {% if a.author %}<span>{{ a.author }}</span>{% endif %}
     {% if domain(a.url) %}<span>{{ domain(a.url) }}</span>{% endif %}
@@ -20,19 +16,14 @@
   </p>
   {% if a.image_url %}<img class="article-img" src="{{ a.image_url }}" alt="" loading="lazy" onerror="this.remove()">{% endif %}
 
-  <p class="lead-para">{% if show_toggle %}<span class="v-tr">{{ a.display_summary }}</span><span class="v-or">{{ a.summary }}</span>{% else %}{{ a.display_summary }}{% endif %}</p>
+  <p class="lead-para">{{ a.display_summary }}</p>
 
   {% set bodytext = a.content_no or a.content %}
   {% if bodytext %}
     {% if body_pending %}<p class="translating" id="translating-note">{{ t("Translating the article …") }}</p>{% endif %}
-    <div class="body-text v-tr" id="body-text"{% if body_pending %} data-translate-url="/article/{{ a.id }}/body"{% endif %}>
+    <div class="body-text" id="body-text"{% if body_pending %} data-translate-url="/article/{{ a.id }}/body"{% endif %}>
       {{ body_html(bodytext)|safe }}
     </div>
-    {% if show_toggle and a.content %}
-    <div class="body-text v-or" id="body-original">
-      {{ body_html(a.content)|safe }}
-    </div>
-    {% endif %}
     {% if body_pending %}
     <script>
       (function () {
@@ -57,28 +48,10 @@
   <p class="source-link">
     {{ t("Read the full story at the source:") }} <a href="{{ a.url }}" target="_blank" rel="noopener">{{ domain(a.url) or a.url }}</a>
   </p>
-  {% if a.title_no and a.title_no != a.title and not show_toggle %}
+  {% if a.title_no and a.title_no != a.title %}
     <p class="orig-note">{{ t("Translated from the original:") }} «{{ a.title }}»</p>
   {% endif %}
 </article>
-
-{% if show_toggle %}
-<script>
-  (function () {
-    var art = document.getElementById('article-main');
-    var btn = document.getElementById('lang-toggle-btn');
-    if (!art || !btn) return;
-    var labelOrig = btn.getAttribute('data-label-orig');
-    var labelTr = btn.getAttribute('data-label-tr');
-    btn.addEventListener('click', function () {
-      var showingOriginal = art.getAttribute('data-view') === 'original';
-      art.setAttribute('data-view', showingOriginal ? 'translated' : 'original');
-      btn.setAttribute('aria-pressed', showingOriginal ? 'false' : 'true');
-      btn.textContent = showingOriginal ? labelOrig : labelTr;
-    });
-  })();
-</script>
-{% endif %}
 
 {% if prev_item or next_item %}
 <nav class="article-nav">

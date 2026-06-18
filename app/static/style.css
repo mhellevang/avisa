@@ -397,27 +397,6 @@ html { scroll-behavior: smooth; }
 .source-link { font-family: var(--serif); font-size: 0.85rem; margin-top: 26px; padding-top: 14px; border-top: 1px solid var(--rule); word-break: break-all; }
 .orig-note { font-family: var(--serif); font-style: italic; font-size: 0.8rem; color: var(--ink-soft); }
 
-/* Original/oversettelse-toggle. Begge versjoner rendres; data-view styrer hvilken som vises. */
-.lang-toggle {
-  font-family: var(--serif);
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  font-size: 0.72rem;
-  color: var(--accent);
-  background: none;
-  border: 1px solid var(--rule);
-  border-radius: 3px;
-  padding: 3px 9px;
-  cursor: pointer;
-  float: right;
-  margin: 4px 0 0 12px;
-}
-.lang-toggle:hover { border-color: var(--accent); }
-#article-main .v-or { display: none; }
-#article-main[data-view="original"] .v-tr { display: none; }
-#article-main[data-view="original"] .v-or { display: inline; }
-#article-main[data-view="original"] #body-original { display: block; }
-
 /* ---------- Diverse ---------- */
 .empty { text-align: center; font-style: italic; color: var(--ink-soft); margin: 60px 0; }
 .colophon {

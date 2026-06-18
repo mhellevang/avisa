@@ -304,18 +304,6 @@ def article(request: Request, article_id: int):
 
         body_pending = do_translate and bool(a.content) and a.content_no is None
 
-        # Show the original/translation toggle only when there's a genuine
-        # original to flip back to (i.e. the story was actually translated, or
-        # a body translation is still in flight).
-        show_toggle = bool(
-            do_translate and (
-                (a.title_no and a.title_no != a.title)
-                or (a.summary_no and a.summary_no != a.summary)
-                or (a.content_no and a.content_no != a.content)
-                or body_pending
-            )
-        )
-
         # Previous/next within the latest edition, so you can page through it like a newspaper.
         ed = s.exec(select(Edition).order_by(Edition.id.desc())).first()
         prev_item = next_item = None
@@ -355,7 +343,6 @@ def article(request: Request, article_id: int):
             "next_item": next_item,
             "read_min": read_min,
             "body_pending": body_pending,
-            "show_toggle": show_toggle,
             "source_name": source_name,
         },
     )
