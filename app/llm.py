@@ -257,6 +257,26 @@ def _restore_code(text: str, blocks: list[str]) -> str:
     return text
 
 
+_MD_IMAGE = re.compile(r"!\[[^\]]*\]\([^)]*\)")
+
+
+def _mask_images(text: str, blocks: list[str]) -> str:
+    """Replaces inline images with sentinels before translation so the model
+    never rewrites the URL or drops the image. blocks accumulates across all
+    items in one call; restored with _restore_images."""
+    def repl(m: "re.Match") -> str:
+        blocks.append(m.group(0))
+        return f"⟦IMG{len(blocks) - 1}⟧"
+
+    return _MD_IMAGE.sub(repl, text)
+
+
+def _restore_images(text: str, blocks: list[str]) -> str:
+    for i, block in enumerate(blocks):
+        text = text.replace(f"⟦IMG{i}⟧", block)
+    return text
+
+
 def _translator_system(target: str, *, markdown: bool = False) -> str:
     """Shared system prompt for the translation calls. The model otherwise
     occasionally coins non-words (e.g. "Emergenesen" for "the emergence of") or
@@ -269,7 +289,7 @@ def _translator_system(target: str, *, markdown: bool = False) -> str:
         f"never carry over English spellings or anglicisms (translate the meaning, not "
         f"word by word). Keep proper nouns and paragraph structure. If the text is "
         f"already in {target}, return it unchanged. Do not add comments. "
-        f"Leave any ⟦CODE…⟧ placeholders exactly as they are."
+        f"Leave any ⟦CODE…⟧ or ⟦IMG…⟧ placeholders exactly as they are."
     )
     if markdown:
         s += (
@@ -287,6 +307,8 @@ def translate_fields(
     if not enabled():
         return None
     masked, code_blocks = _mask_code(content or "")
+    img_blocks: list[str] = []
+    masked = _mask_images(masked, img_blocks)
     body = masked[: settings.translate_body_max_chars]
     system = _translator_system(target)
     user = (
@@ -302,7 +324,9 @@ def translate_fields(
     data = _extract_json(_chat(settings.translate_model, system, user, max_tokens=max_tokens))
     if isinstance(data, dict) and "title" in data:
         if isinstance(data.get("content"), str):
-            data["content"] = _restore_code(data["content"], code_blocks)
+            data["content"] = _restore_images(
+                _restore_code(data["content"], code_blocks), img_blocks
+            )
         return data
     return None
 
@@ -315,9 +339,11 @@ def translate_batch(items: list[dict], target: str = "English") -> dict[int, dic
         return {}
 
     blocks = []
+    img_blocks: list[str] = []
     total_chars = 0
     for it in items:
         body = (it.get("content") or "")[: settings.translate_body_max_chars]
+        body = _mask_images(body, img_blocks)
         total_chars += len(body) + len(it.get("summary") or "") + len(it.get("title") or "")
         blocks.append(
             f"=== ARTICLE {it['id']} ===\n"
@@ -340,6 +366,8 @@ def translate_batch(items: list[dict], target: str = "English") -> dict[int, dic
         for d in data:
             if isinstance(d, dict) and "id" in d:
                 try:
+                    if isinstance(d.get("content"), str):
+                        d["content"] = _restore_images(d["content"], img_blocks)
                     out[int(d["id"])] = d
                 except (TypeError, ValueError):
                     continue
@@ -388,6 +416,8 @@ def translate_body(title: str, content: str, target: str = "English") -> Optiona
     if not enabled() or not content:
         return None
     masked, code_blocks = _mask_code(content)
+    img_blocks: list[str] = []
+    masked = _mask_images(masked, img_blocks)
     body = masked[: settings.translate_body_max_chars]
     system = _translator_system(target, markdown=True)
     user = (
@@ -398,7 +428,7 @@ def translate_body(title: str, content: str, target: str = "English") -> Optiona
     )
     data = _extract_json(_chat(settings.translate_model, system, user, max_tokens=6000))
     if isinstance(data, dict) and isinstance(data.get("content"), str):
-        return _restore_code(data["content"], code_blocks)
+        return _restore_images(_restore_code(data["content"], code_blocks), img_blocks)
     return None
 
 

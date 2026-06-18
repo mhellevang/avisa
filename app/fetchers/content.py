@@ -116,9 +116,68 @@ def _looks_like_liveblog(text: str) -> bool:
     return False
 
 
+# Thumbnail wrappers: many sites render article figures as <a href=full><img
+# src=thumb></a>. trafilatura discards images nested inside a link, so unwrap
+# such anchors to the bare <img> before extraction — otherwise an image-heavy
+# article (e.g. a screenshot walkthrough) comes out with no images at all. When
+# the anchor points at a full-resolution image (the thumbnail's target), point
+# the bare <img> at it instead — the thumbnail is often too small to be useful.
+_IMG_LINK_WRAP = re.compile(r"<a\b([^>]*)>\s*(<img\b[^>]*>)\s*</a>", re.I)
+_HREF = re.compile(r"""href=["']([^"']+)["']""", re.I)
+_IMG_SRC = re.compile(r"""\bsrc=["'][^"']*["']""", re.I)
+_IMG_EXT = re.compile(r"\.(?:png|jpe?g|gif|webp|avif)(?:$|[?#])", re.I)
+
+
+def _unwrap_img_links(html: str) -> str:
+    def repl(m: "re.Match") -> str:
+        a_attrs, img_tag = m.group(1), m.group(2)
+        href_m = _HREF.search(a_attrs)
+        if href_m and _IMG_EXT.search(href_m.group(1)) and _IMG_SRC.search(img_tag):
+            href = href_m.group(1)
+            img_tag = _IMG_SRC.sub(lambda _m: f'src="{href}"', img_tag, count=1)
+        return img_tag
+
+    return _IMG_LINK_WRAP.sub(repl, html)
+
+# Junk images: logos, placeholders, sprites, tracking pixels, avatars, ad slots —
+# never article content. Shared by the inline-image and og:image filters.
+_JUNK_IMG = re.compile(
+    r"default|placeholder|logo|fallback|share[_-]?image|sprite|/icons?/|avatar|/ads?/|pixel|1x1|spacer",
+    re.I,
+)
+
+# An extracted markdown image: ![alt](src "optional title").
+_MD_IMG = re.compile(r"!\[([^\]]*)\]\(([^)]*)\)")
+
+
+def _clean_images(md: str, base_url: str) -> str:
+    """Resolves inline image srcs to absolute URLs and drops junk: empty/missing
+    srcs (![]()), non-http schemes, logos/icons/tracking pixels, and SVGs.
+    trafilatura leaves the src relative, so urljoin it against the article URL.
+    Each image is re-emitted as a clean ![alt](src) so the body renderer (which
+    only matches http(s) srcs with no spaces/parens) turns every survivor into an
+    <img>; dropped images become an empty string the renderer skips."""
+    def repl(m: "re.Match") -> str:
+        alt = m.group(1)
+        raw = m.group(2).strip()
+        # src is the first whitespace-delimited token — drops a markdown "title".
+        src = raw.split()[0].strip("<>") if raw else ""
+        if not src:
+            return ""
+        src = urljoin(base_url, src)
+        if not src.lower().startswith(("http://", "https://")):
+            return ""
+        if _JUNK_IMG.search(src) or src.lower().split("?")[0].endswith(".svg"):
+            return ""
+        return f"![{alt}]({src})"
+
+    return _MD_IMG.sub(repl, md)
+
+
 def _extract_text(html: str, url: str) -> Optional[str]:
     if not html:
         return None
+    html = _unwrap_img_links(html)
     try:
         text = trafilatura.extract(
             html,
@@ -129,6 +188,9 @@ def _extract_text(html: str, url: str) -> Optional[str]:
             # trafilatura resolves relative links to absolute.
             include_tables=True,
             include_links=True,
+            # Keep inline images (![alt](src)); _clean_images absolutizes and
+            # filters them, and the body renderer turns them into <img>.
+            include_images=True,
             # favor_precision drops surrounding page chrome (nav, "Fork", "Copy
             # link", "Metadata" on e.g. GitHub) that favor_recall keeps. Pages
             # that under-extract fall through to the Playwright pass.
@@ -140,6 +202,8 @@ def _extract_text(html: str, url: str) -> Optional[str]:
     if not text:
         return None
     cleaned = _dedupe_blocks(_clean_markdown(text)) or None
+    if cleaned:
+        cleaned = _clean_images(cleaned, url) or None
     if cleaned and _looks_like_liveblog(cleaned):
         return None
     return cleaned
@@ -160,7 +224,7 @@ def _og_image(html: str, url: str) -> Optional[str]:
             if c and c.group(1).strip():
                 img = urljoin(url, c.group(1).strip())
                 # Skip obvious placeholders/logos — in that case the RSS image is better.
-                if re.search(r"default|placeholder|logo|fallback|share[_-]?image", img, re.I):
+                if _JUNK_IMG.search(img):
                     return None
                 return img
     return None

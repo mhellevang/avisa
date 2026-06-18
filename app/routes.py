@@ -31,6 +31,9 @@ def domain(url: str) -> str:
         return ""
 
 
+# An inline image ![alt](url) — only http(s) srcs become <img>. Must run before
+# _MD_LINK, or the link regex matches the [alt](url) inside it and leaves a stray '!'.
+_MD_IMAGE = re.compile(r"!\[([^\]]*)\]\((https?://[^\s)]+)\)")
 _MD_LINK = re.compile(r"\[([^\]]+)\]\((https?://[^\s)]+)\)")
 # Any leftover markdown link (relative, mailto:, …) — kept as plain text so a
 # raw '[text](url)' never shows. Run after _MD_LINK turns http(s) into anchors.
@@ -47,6 +50,10 @@ def _inline_md(text: str) -> str:
     """Renders inline markdown in already-HTML-escaped text: links, bold,
     italic, inline code. Only http(s) links become anchors; other links keep
     their text only."""
+    text = _MD_IMAGE.sub(
+        lambda m: f'<img src="{m.group(2)}" alt="{m.group(1)}" loading="lazy" onerror="this.remove()">',
+        text,
+    )
     text = _MD_LINK.sub(
         lambda m: f'<a href="{m.group(2)}" target="_blank" rel="noopener">{m.group(1)}</a>',
         text,
@@ -644,6 +651,51 @@ def debug_refetch(request: Request, article_id: int):
         a = s.get(Article, article_id)
         result = _article_debug(s, a, full=True)
     result["refetch_got_text"] = bool(got)
+    return JSONResponse(result)
+
+
+@router.post("/debug/article/{article_id}/reprocess")
+def debug_reprocess(request: Request, article_id: int):
+    """Re-extract full text (so a fetcher fix — e.g. inline images — is picked up
+    on an already-ingested article) AND re-translate it, in one call. Equivalent
+    to /refetch followed by /retranslate. Returns the fresh trace."""
+    if not _debug_auth_ok(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    with get_session() as s:
+        a = s.get(Article, article_id)
+        if not a:
+            return JSONResponse({"error": "not found"}, status_code=404)
+        url = a.url
+    # Local import: pulls in the browser stack, keep it off the module load path.
+    from .pipeline.content import _run_fetch
+
+    got = _run_fetch([(article_id, url)])
+
+    retranslated = False
+    if llm.enabled():
+        plang = runtime_config.paper_lang()
+        target = i18n.lang_prompt_name(plang)
+        with get_session() as s:
+            a = s.get(Article, article_id)
+            fields = llm.translate_fields(a.title, a.summary or "", target=target)
+            if fields:
+                a.title_no = fields.get("title", a.title)
+                a.summary_no = fields.get("summary", a.summary)
+            else:
+                a.title_no, a.summary_no = a.title, a.summary
+            if a.content:
+                translated = llm.translate_body(a.display_title, a.content, target=target)
+                a.content_no = translated or a.content
+            a.translated_lang = plang
+            a.translated_at = utcnow()
+            s.commit()
+            retranslated = True
+
+    with get_session() as s:
+        a = s.get(Article, article_id)
+        result = _article_debug(s, a, full=True)
+    result["refetch_got_text"] = bool(got)
+    result["retranslated"] = retranslated
     return JSONResponse(result)
 
 

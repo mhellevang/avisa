@@ -377,6 +377,7 @@ html { scroll-behavior: smooth; }
 .article-nav .nav-title { font-family: var(--display); font-size: 1.05rem; line-height: 1.15; }
 .article-nav a:hover .nav-title { text-decoration: underline; }
 .article-img { width: 100%; height: auto; filter: grayscale(0.12) contrast(1.03); margin-bottom: 18px; }
+.body-text img { display: block; max-width: 100%; height: auto; margin: 1.4em auto; border: 1px solid var(--rule); }
 .lead-para { font-size: 1.2rem; line-height: 1.5; font-weight: 500; }
 .body-text p { font-size: 1.05rem; line-height: 1.6; margin: 0 0 1em; }
 .body-text h2 { font-family: var(--display); font-weight: 800; font-size: 1.5rem; line-height: 1.2; margin: 1.6em 0 0.5em; }
