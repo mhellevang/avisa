@@ -115,29 +115,20 @@ teams. Then even reading requires a Cloudflare login; the app's own
 ## Updating to a new version
 `git push origin main` builds and pushes a fresh `ghcr.io/mhellevang/avisa:latest`
 via GitHub Actions — but the box sits behind NAT, so **CI can't push the update to
-it**. Bring the new image down to the NAS one of two ways:
+it**. The stack handles this itself:
 
+- **Automatic (default):** the bundled `watchtower` service polls GHCR hourly and
+  recreates `avisa` whenever `:latest` changes, so a `git push` reaches the box on
+  its own. It's scoped by the `com.centurylinklabs.watchtower.enable=true` label on
+  `avisa` (plus `WATCHTOWER_LABEL_ENABLE=true`), so it only touches this stack — not
+  every other container on the NAS.
+
+  > **First deploy only:** Watchtower starts updating *after* the stack is up, so the
+  > very first time you change the compose you still need a manual **Pull + Up** to
+  > pick up the new `watchtower` service. After that it's hands-off.
+
+  Trade-off: a bad push auto-deploys. Low stakes for a personal paper — but if you'd
+  rather approve each update, delete the `watchtower` service and use the manual
+  route below.
 - **Manual:** in Dockge/Portainer hit **Pull + Up** (or
   `docker compose -f docker-compose.truenas.yml pull && ... up -d`).
-- **Automatic:** add [Watchtower](https://containrrr.dev/watchtower/) — it polls the
-  registry and recreates `avisa` whenever `:latest` changes, so a `git push` reaches
-  the box on its own. **Scope it with a label** so it only touches this stack, not
-  every other container on the NAS:
-  ```yaml
-    avisa:
-      # ... existing avisa service, plus:
-      labels:
-        - com.centurylinklabs.watchtower.enable=true
-
-    watchtower:
-      image: containrrr/watchtower
-      restart: unless-stopped
-      volumes:
-        - /var/run/docker.sock:/var/run/docker.sock
-      environment:
-        WATCHTOWER_LABEL_ENABLE: "true"   # only update labelled containers
-        WATCHTOWER_CLEANUP: "true"        # prune old images after updating
-      command: --interval 3600            # check hourly
-  ```
-  Trade-off: a bad push auto-deploys. Low stakes for a personal paper, but use the
-  manual route if you'd rather approve each update.

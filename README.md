@@ -86,8 +86,10 @@ on any Docker host.
 
 Every push to `main` builds and pushes a fresh image to GHCR
 (`.github/workflows/build.yml`). Since the box is behind NAT, CI can't push to it —
-update by pulling the new image (in Dockge, or `docker compose pull && up -d`), or
-add [Watchtower](https://containrrr.dev/watchtower/) for hands-off pull-based updates.
+the stack bundles [Watchtower](https://containrrr.dev/watchtower/), which polls GHCR
+and recreates `avisa` when `:latest` changes, so a `git push` reaches the box on its
+own. Drop the `watchtower` service and pull manually (Dockge, or `docker compose pull
+&& up -d`) if you'd rather approve each update.
 
 ## Config (.env)
 

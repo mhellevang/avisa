@@ -21,6 +21,10 @@ services:
       DATABASE_URL: sqlite:////data/avisa.db
     volumes:
       - avisa-data:/data
+    # Let Watchtower auto-update this container when :latest changes in GHCR.
+    # Scoped by label so Watchtower only touches this stack (WATCHTOWER_LABEL_ENABLE).
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
     # No published ports — cloudflared reaches it internally at http://avisa:8000.
 
   cloudflared:
@@ -29,6 +33,20 @@ services:
     command: tunnel --no-autoupdate run --token ${CF_TUNNEL_TOKEN}
     depends_on:
       - avisa
+
+  # Polls GHCR and recreates avisa when ghcr.io/mhellevang/avisa:latest changes,
+  # so a `git push origin main` (which CI builds + pushes) reaches the NAT'd box
+  # on its own. Trade-off: a bad push auto-deploys — drop this service and use
+  # Dockge/Portainer "Pull + Up" manually if you'd rather approve each update.
+  watchtower:
+    image: containrrr/watchtower:latest
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      WATCHTOWER_LABEL_ENABLE: "true"   # only update labelled containers
+      WATCHTOWER_CLEANUP: "true"        # prune old images after updating
+    command: --interval 3600            # check hourly
 
 volumes:
   avisa-data:
