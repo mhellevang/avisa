@@ -90,6 +90,32 @@ def _dedupe_blocks(md: str) -> str:
     return "\n\n".join(out).strip()
 
 
+# Live blogs / livetickers render as a long stream of timestamped posts, each
+# its own topic ("Thursday, June 18, 10:47 a.m.", "10:50 a.m.", or 24h "10:47").
+# trafilatura extracts the whole stream as one body, so a single "article" ends
+# up a multi-day mishmash (e.g. the Swiss parliament summer-session ticker —
+# 38k chars spanning nuclear power, VAT, Mercosur …). A genuine article has at
+# most a stray timestamp; many standalone ones mean it's a live feed, not an
+# article — so we discard it rather than store the stream as the body.
+_LIVE_ENTRY = re.compile(
+    r"^(?:[A-Za-z]+day[ ,].*?\s)?"  # optional "Monday, June 1, 2026, " prefix
+    r"\d{1,2}(?:[:.]\d{2})?\s*(?:a\.m\.|p\.m\.|am|pm)$"  # 5 a.m. / 10:47 a.m.
+    r"|^(?:[A-Za-z]+day[ ,].*?\s)?\d{1,2}[:.]\d{2}$",  # 24h 10:47
+    re.I,
+)
+_LIVEBLOG_MIN_ENTRIES = 6
+
+
+def _looks_like_liveblog(text: str) -> bool:
+    entries = 0
+    for line in text.splitlines():
+        if _LIVE_ENTRY.match(line.strip()):
+            entries += 1
+            if entries >= _LIVEBLOG_MIN_ENTRIES:
+                return True
+    return False
+
+
 def _extract_text(html: str, url: str) -> Optional[str]:
     if not html:
         return None
@@ -113,7 +139,10 @@ def _extract_text(html: str, url: str) -> Optional[str]:
         return None
     if not text:
         return None
-    return _dedupe_blocks(_clean_markdown(text)) or None
+    cleaned = _dedupe_blocks(_clean_markdown(text)) or None
+    if cleaned and _looks_like_liveblog(cleaned):
+        return None
+    return cleaned
 
 
 def _og_image(html: str, url: str) -> Optional[str]:
