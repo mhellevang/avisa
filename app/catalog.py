@@ -25,6 +25,14 @@ TOPICS: list[dict] = [
      "phrase": "health and wellbeing"},
     {"key": "sport", "label_en": "Sport", "label_no": "Sport",
      "phrase": "sport"},
+    {"key": "education", "label_en": "Education", "label_no": "Utdanning",
+     "phrase": "education, schools and universities"},
+    {"key": "entertainment", "label_en": "Entertainment", "label_no": "Underholdning",
+     "phrase": "film, television, music and entertainment"},
+    {"key": "lifestyle", "label_en": "Lifestyle", "label_no": "Livsstil",
+     "phrase": "lifestyle, food, travel and living"},
+    {"key": "crime", "label_en": "Crime & justice", "label_no": "Krim & rettsvesen",
+     "phrase": "crime, justice and the courts"},
 ]
 
 # Default tone appended to the generated profile so curation favours depth.
@@ -122,16 +130,15 @@ SOURCES: list[dict] = [
 ]
 
 
-def topic_phrases(keys: list[str], topics: list[dict] | None = None) -> list[str]:
-    by_key = {t["key"]: t for t in (topics if topics is not None else TOPICS)}
+def topic_phrases(keys: list[str]) -> list[str]:
+    by_key = {t["key"]: t for t in TOPICS}
     return [by_key[k]["phrase"] for k in keys if k in by_key]
 
 
-def build_preferences(topic_keys: list[str], extra: str = "", topics: list[dict] | None = None) -> str:
+def build_preferences(topic_keys: list[str], extra: str = "") -> str:
     """Compose the profile text curation runs against, from chosen topics plus
-    optional free-text refinement. Pass `topics` to include custom topics beyond
-    the built-in TOPICS."""
-    phrases = topic_phrases(topic_keys, topics)
+    optional free-text refinement."""
+    phrases = topic_phrases(topic_keys)
     parts: list[str] = []
     if phrases:
         if len(phrases) == 1:

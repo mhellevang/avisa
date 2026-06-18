@@ -807,7 +807,7 @@ def settings_page(request: Request, saved: int = 0, msg: str = "", region: str =
     selected_topics = set(runtime_config.topic_keys())
     topics = [
         {"key": t["key"], "label": _label(t), "checked": t["key"] in selected_topics}
-        for t in runtime_config.all_topics()
+        for t in catalog.TOPICS
     ]
     # If the user has a custom free-text profile from before (different from the
     # default) and hasn't picked topics yet, seed the refinement box with it so
@@ -861,17 +861,13 @@ def settings_save(
     skip_langs: list[str] = Form(default=[]),
 ):
     runtime_config.set_value("paper_title", paper_title.strip())
-    # Profile is built from the chosen topics plus optional free-text refinement.
-    all_topics = runtime_config.all_topics()
-    valid = [t["key"] for t in all_topics]
+    # Profile is derived from the chosen topics plus optional free-text
+    # refinement — rebuild_preferences is the single writer of `preferences`.
+    valid = {t["key"] for t in catalog.TOPICS}
     chosen = [t for t in topics if t in valid]
-    extra = preferences_extra.strip()
-    built = catalog.build_preferences(chosen, extra, all_topics)
     runtime_config.set_value("profile_topics", ",".join(chosen))
-    runtime_config.set_value("preferences_extra", extra)
-    # Don't wipe an existing profile if the user saved with nothing selected.
-    if built:
-        runtime_config.set_value("preferences", built)
+    runtime_config.set_value("preferences_extra", preferences_extra.strip())
+    runtime_config.rebuild_preferences()
     runtime_config.set_value("front_page_size", str(max(1, front_page_size)))
     poll = max(1, poll_minutes)
     runtime_config.set_value("poll_minutes", str(poll))
@@ -948,7 +944,7 @@ def configure(background_tasks: BackgroundTasks, command: str = Form(...)):
         runtime_config.poll_minutes(),
         history=history,
         target=i18n.lang_prompt_name(plang),
-        topics=runtime_config.all_topics(),
+        refinement=runtime_config.get("preferences_extra"),
     )
     history.append({"role": "user", "text": command})
     if result is None:
@@ -993,8 +989,9 @@ def configure(background_tasks: BackgroundTasks, command: str = Form(...)):
                     key = "turned on «{name}»" if match.enabled else "turned off «{name}»"
                     done.append(i18n.current(key, name=match.name))
                     rebuild = True
-        elif kind == "set_preferences" and act.get("value"):
-            runtime_config.set_value("preferences", str(act["value"]).strip())
+        elif kind == "set_refinement":
+            runtime_config.set_value("preferences_extra", str(act.get("value") or "").strip())
+            runtime_config.rebuild_preferences()
             done.append(i18n.current("updated the profile")); rebuild = True
         elif kind == "set_title" and act.get("value"):
             runtime_config.set_value("paper_title", str(act["value"]).strip())
@@ -1013,36 +1010,20 @@ def configure(background_tasks: BackgroundTasks, command: str = Form(...)):
                 done.append(i18n.current("set the poll interval to {value} min", value=poll))
             except (TypeError, ValueError):
                 pass
-        elif kind == "add_topic" and act.get("phrase"):
-            stored = runtime_config.add_topic(
-                str(act.get("key") or act.get("label") or ""),
-                str(act.get("label") or ""),
-                str(act["phrase"]),
-            )
-            if stored:
-                chosen = runtime_config.topic_keys()
-                if stored not in chosen:
-                    chosen.append(stored)
-                    runtime_config.set_value("profile_topics", ",".join(chosen))
-                built = catalog.build_preferences(
-                    chosen, runtime_config.get("preferences_extra"), runtime_config.all_topics()
-                )
-                if built:
-                    runtime_config.set_value("preferences", built)
-                label = str(act.get("label") or stored)
-                done.append(i18n.current("added the topic «{label}»", label=label)); rebuild = True
-        elif kind == "remove_topic" and act.get("key"):
+        elif kind in ("select_topic", "deselect_topic") and act.get("key"):
             key = str(act["key"]).strip().lower()
-            chosen = [k for k in runtime_config.topic_keys() if k != key]
-            changed = runtime_config.remove_topic(key) or key in runtime_config.topic_keys()
-            if changed:
+            by_key = {t["key"]: t for t in catalog.TOPICS}
+            chosen = runtime_config.topic_keys()
+            if key in by_key and kind == "select_topic" and key not in chosen:
+                chosen.append(key)
                 runtime_config.set_value("profile_topics", ",".join(chosen))
-                built = catalog.build_preferences(
-                    chosen, runtime_config.get("preferences_extra"), runtime_config.all_topics()
-                )
-                if built:
-                    runtime_config.set_value("preferences", built)
-                done.append(i18n.current("removed the topic «{key}»", key=key)); rebuild = True
+                runtime_config.rebuild_preferences()
+                done.append(i18n.current("added the topic «{label}»", label=_label(by_key[key]))); rebuild = True
+            elif key in by_key and kind == "deselect_topic" and key in chosen:
+                chosen = [k for k in chosen if k != key]
+                runtime_config.set_value("profile_topics", ",".join(chosen))
+                runtime_config.rebuild_preferences()
+                done.append(i18n.current("removed the topic «{key}»", key=_label(by_key[key]))); rebuild = True
 
     # Build the configurator's reply: the LLM answer + the actual receipt.
     bot = reply or (i18n.current("Done.") if done else i18n.current("Understood the message, but found nothing to change."))
