@@ -46,7 +46,7 @@ services:
     environment:
       WATCHTOWER_LABEL_ENABLE: "true"   # only update labelled containers
       WATCHTOWER_CLEANUP: "true"        # prune old images after updating
-    command: --interval 30              # poll every 30s — deploy lands ~30s after CI
+    command: --interval 300             # poll every 5 min
 
 volumes:
   avisa-data:
