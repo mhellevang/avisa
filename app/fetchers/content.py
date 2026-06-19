@@ -71,6 +71,44 @@ def _clean_markdown(md: str) -> str:
     return "\n".join(cleaned).strip()
 
 
+# Metadata header blocks: some sources (notably ScienceDaily) lead the article
+# body with a definition-list of "Date: / Source: / Summary: / Share:" — page
+# chrome, not article text — usually under a heading that just repeats the
+# title. trafilatura keeps it because it sits inside the main content. The
+# Summary item also duplicates the article's own summary and first paragraph.
+_META_LABELS = {
+    "date", "source", "summary", "share", "full story", "full size image",
+    "story source", "journal reference", "journal references", "cite this page",
+    "related topics", "related stories", "advertisement",
+}
+
+
+def _strip_metadata_header(md: str) -> str:
+    """Drops a leading metadata definition-list (e.g. ScienceDaily's
+    Date/Source/Summary/Share block) and a duplicated-title heading right above
+    it. Conservative: only a bullet-list block among the first few, where the
+    bullets are clearly metadata labels rather than article content."""
+    blocks = re.split(r"\n\s*\n", md)
+    for i, block in enumerate(blocks[:3]):
+        lines = [ln.strip() for ln in block.splitlines() if ln.strip()]
+        if not lines:
+            continue
+        bullets = [ln for ln in lines if ln[:2] in ("- ", "* ")]
+        if len(bullets) != len(lines):
+            continue  # not a pure bullet list — leave it alone
+        labels = sum(
+            1 for ln in bullets if ln[2:].strip().rstrip(":").strip().lower() in _META_LABELS
+        )
+        if labels >= 2:
+            del blocks[i]
+            # Drop a lone heading immediately above it — the repeated title.
+            prev = blocks[i - 1].strip() if i >= 1 else ""
+            if prev.startswith("#") and "\n" not in prev:
+                del blocks[i - 1]
+            break
+    return "\n\n".join(blocks).strip()
+
+
 def _dedupe_blocks(md: str) -> str:
     """Drops verbatim-repeated paragraphs, keeping the first occurrence.
     Some pages (notably video/teaser pages) render the same headline + caption
@@ -201,7 +239,7 @@ def _extract_text(html: str, url: str) -> Optional[str]:
         return None
     if not text:
         return None
-    cleaned = _dedupe_blocks(_clean_markdown(text)) or None
+    cleaned = _dedupe_blocks(_strip_metadata_header(_clean_markdown(text))) or None
     if cleaned:
         cleaned = _clean_images(cleaned, url) or None
     if cleaned and _looks_like_liveblog(cleaned):
