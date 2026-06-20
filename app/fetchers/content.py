@@ -71,6 +71,58 @@ def _clean_markdown(md: str) -> str:
     return "\n".join(cleaned).strip()
 
 
+# "Recommended Stories" / related-article widgets that papers (notably Al
+# Jazeera) splice mid-article. trafilatura renders the list with screen-reader
+# scaffolding — a "list of N items" opener and "list X of N" markers around each
+# related headline:
+#
+#   ## Recommended Stories
+#
+#   list of 4 items- list 1 of 4
+#   [Headline A](url) - list 2 of 4
+#   [Headline B](url) - list 3 of 4
+#   [Headline C](url)
+#
+# The "list of N items" / "list X of N" text never occurs in genuine prose, so
+# it is a reliable tell-tale. We drop the whole contiguous block plus a lone
+# heading directly above it (the widget title).
+_LIST_SCAFFOLD_OPEN = re.compile(r"^list of \d+ items\b", re.I)
+_LIST_SCAFFOLD_ITEM = re.compile(r"\blist \d+ of \d+\b", re.I)
+
+
+def _strip_related_lists(md: str) -> str:
+    lines = md.split("\n")
+    out: list[str] = []
+    i = 0
+    n = len(lines)
+    while i < n:
+        if _LIST_SCAFFOLD_OPEN.match(lines[i].strip()):
+            # Gather the contiguous block (related items run with no blank line
+            # between them; the block ends at the next blank line).
+            j = i
+            while j < n and lines[j].strip():
+                j += 1
+            block = lines[i:j]
+            # Only treat it as a widget if it carries the "list X of N" markers —
+            # guards against a stray prose line that merely starts "list of N…".
+            if any(_LIST_SCAFFOLD_ITEM.search(ln) for ln in block):
+                while out and not out[-1].strip():
+                    out.pop()  # blank line between heading and block
+                if out and out[-1].lstrip().startswith("#"):
+                    out.pop()  # the widget title heading
+                i = j
+                continue
+        out.append(lines[i])
+        i += 1
+    # Collapse runs of blank lines left behind by the removal.
+    cleaned: list[str] = []
+    for line in out:
+        if not line.strip() and cleaned and not cleaned[-1].strip():
+            continue
+        cleaned.append(line)
+    return "\n".join(cleaned).strip()
+
+
 # Metadata header blocks: some sources (notably ScienceDaily) lead the article
 # body with a definition-list of "Date: / Source: / Summary: / Share:" — page
 # chrome, not article text — usually under a heading that just repeats the
@@ -239,7 +291,10 @@ def _extract_text(html: str, url: str) -> Optional[str]:
         return None
     if not text:
         return None
-    cleaned = _dedupe_blocks(_strip_metadata_header(_clean_markdown(text))) or None
+    cleaned = (
+        _dedupe_blocks(_strip_metadata_header(_strip_related_lists(_clean_markdown(text))))
+        or None
+    )
     if cleaned:
         cleaned = _clean_images(cleaned, url) or None
     if cleaned and _looks_like_liveblog(cleaned):
