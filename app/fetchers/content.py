@@ -240,13 +240,26 @@ _JUNK_IMG = re.compile(
 _MD_IMG = re.compile(r"!\[([^\]]*)\]\(([^)]*)\)")
 
 
-def _clean_images(md: str, base_url: str) -> str:
+def _img_key(src: str) -> str:
+    """Normalizes an image URL for same-image comparison: drops the query string
+    (resize/quality params) and fragment, lowercased. So a 1920×1440 hero and a
+    770×513 inline crop of the same file (…getty_123.jpg?resize=…) compare equal."""
+    return src.split("?")[0].split("#")[0].lower()
+
+
+def _clean_images(md: str, base_url: str, hero_url: Optional[str] = None) -> str:
     """Resolves inline image srcs to absolute URLs and drops junk: empty/missing
     srcs (![]()), non-http schemes, logos/icons/tracking pixels, and SVGs.
     trafilatura leaves the src relative, so urljoin it against the article URL.
     Each image is re-emitted as a clean ![alt](src) so the body renderer (which
     only matches http(s) srcs with no spaces/parens) turns every survivor into an
-    <img>; dropped images become an empty string the renderer skips."""
+    <img>; dropped images become an empty string the renderer skips.
+
+    Also drops any inline image that is the same file as hero_url (the og:image
+    shown at the top of the article) — many articles lead the body with the very
+    same figure, so without this it renders twice."""
+    hero_key = _img_key(hero_url) if hero_url else None
+
     def repl(m: "re.Match") -> str:
         alt = m.group(1)
         raw = m.group(2).strip()
@@ -259,12 +272,14 @@ def _clean_images(md: str, base_url: str) -> str:
             return ""
         if _JUNK_IMG.search(src) or src.lower().split("?")[0].endswith(".svg"):
             return ""
+        if hero_key and _img_key(src) == hero_key:
+            return ""  # same image as the hero/lead — don't show it twice
         return f"![{alt}]({src})"
 
     return _MD_IMG.sub(repl, md)
 
 
-def _extract_text(html: str, url: str) -> Optional[str]:
+def _extract_text(html: str, url: str, hero_url: Optional[str] = None) -> Optional[str]:
     if not html:
         return None
     html = _unwrap_img_links(html)
@@ -296,7 +311,8 @@ def _extract_text(html: str, url: str) -> Optional[str]:
         or None
     )
     if cleaned:
-        cleaned = _clean_images(cleaned, url) or None
+        # Strip: dropping a leading duplicate-of-hero image leaves blank lines.
+        cleaned = _clean_images(cleaned, url, hero_url).strip() or None
     if cleaned and _looks_like_liveblog(cleaned):
         return None
     return cleaned
@@ -373,12 +389,13 @@ def _is_paywalled(html: str) -> bool:
 def _result(html: str, url: str) -> dict:
     """{content, image, paywalled} from HTML. content is None if too short or if
     the page is a bot-wall/JS-challenge interstitial rather than the article."""
-    text = None if _is_blocked(html) else _extract_text(html, url)
+    hero = _og_image(html, url)
+    text = None if _is_blocked(html) else _extract_text(html, url, hero)
     if text and len(text) < settings.content_min_chars:
         text = None
     return {
         "content": text,
-        "image": _og_image(html, url),
+        "image": hero,
         "paywalled": _is_paywalled(html),
     }
 
