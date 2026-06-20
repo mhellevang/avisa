@@ -10,6 +10,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
+# Build version (the git SHA) baked in by CI so the running container can report
+# which build it is — see /status. Defaults to "dev" for local builds.
+ARG BUILD_VERSION=dev
+ENV BUILD_VERSION=${BUILD_VERSION}
+
 # The SQLite file lives in a mounted volume (see docker-compose.yml)
 ENV DATABASE_URL=sqlite:////data/avisa.db
 VOLUME ["/data"]

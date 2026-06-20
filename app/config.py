@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     # Set to your local zone so dates/clock match your wall clock, not UTC.
     timezone: str = "Europe/Oslo"
 
+    # Build version (git SHA) baked into the image by CI; "dev" for local runs.
+    # Surfaced at /status so you can confirm which build prod is actually running.
+    build_version: str = "dev"
+
     # Pipeline / paper
     poll_minutes: int = 30
     front_page_size: int = 12

@@ -437,6 +437,7 @@ def status():
     snap["has_edition"] = ed is not None
     snap["edition_id"] = ed.id if ed else None
     snap["edition_built_at"] = ed.built_at.isoformat() if ed else None
+    snap["build_version"] = settings.build_version
     return JSONResponse(snap)
 
 
