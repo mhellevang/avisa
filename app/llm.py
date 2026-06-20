@@ -343,8 +343,11 @@ def translate_batch(items: list[dict], target: str = "English") -> dict[int, dic
     img_blocks: list[str] = []
     total_chars = 0
     for it in items:
-        body = (it.get("content") or "")[: settings.translate_body_max_chars]
-        body = _mask_images(body, img_blocks)
+        # Mask images BEFORE capping so the char cap can never sever an image
+        # markdown mid-token (which would leave a dangling "![alt" in the output);
+        # same order as translate_fields/translate_body.
+        body = _mask_images(it.get("content") or "", img_blocks)
+        body = body[: settings.translate_body_max_chars]
         total_chars += len(body) + len(it.get("summary") or "") + len(it.get("title") or "")
         blocks.append(
             f"=== ARTICLE {it['id']} ===\n"
