@@ -25,6 +25,17 @@ _COMMON_PATHS = [
     "/feeds/all.atom.xml",
 ]
 
+# Query-based feeds (no <link>, no standard path). Tried against the site root.
+# E.g. Schibsted/Lab.no sites (kode24.no) serve RSS at "?lab_viewport=rss".
+_COMMON_QUERY_FEEDS = [
+    "?lab_viewport=rss",
+]
+
+
+def _site_root(url: str) -> str:
+    p = urlparse(url)
+    return f"{p.scheme}://{p.netloc}/"
+
 
 def normalize_url(raw: str) -> str:
     raw = (raw or "").strip()
@@ -75,6 +86,7 @@ def discover_feeds(site_url: str) -> tuple[str | None, list[dict]]:
     candidates: list[str] = [site_url]  # maybe the URL is already a feed
     candidates += _declared_feeds(site_url, html)
     candidates += [urljoin(site_url, p) for p in _COMMON_PATHS]
+    candidates += [_site_root(site_url) + q for q in _COMMON_QUERY_FEEDS]
 
     seen: set[str] = set()
     working: list[dict] = []
