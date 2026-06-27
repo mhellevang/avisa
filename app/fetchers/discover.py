@@ -83,6 +83,22 @@ def _norm_lang(raw: str) -> str:
     return base if base.isalpha() and len(base) == 2 else ""
 
 
+# Country-code TLD -> language, used as a fallback only when the feed declares no
+# <language> (common for Norwegian feeds: NRK, Digi.no, Aftenposten, …). Limited
+# to languages the app can translate, and to TLDs that map cleanly to one of them.
+_TLD_LANGS = {
+    "no": "no", "fr": "fr", "de": "de", "at": "de",
+    "se": "sv", "dk": "da", "es": "es",
+}
+
+
+def _lang_from_url(url: str) -> str:
+    """Guess language from a URL's country-code TLD, or "" if it doesn't map."""
+    host = urlparse(url).netloc.lower().split(":")[0]
+    tld = host.rsplit(".", 1)[-1] if "." in host else ""
+    return _TLD_LANGS.get(tld, "")
+
+
 def _validate_feed(url: str) -> tuple[str, int, str] | None:
     txt = _fetch(url)
     if not txt:
@@ -179,7 +195,7 @@ def propose(user_input: str) -> dict:
                     "url": guess["url"],
                     "section": guess.get("section") or "News",
                     "entries": res[1],
-                    "lang": res[2],
+                    "lang": res[2] or _lang_from_url(guess["url"]),
                 }
         # No feed to find: try to auto-detect a Playwright selector.
         pw = detect_playwright_source(site, title)
@@ -213,5 +229,5 @@ def propose(user_input: str) -> dict:
         "url": url,
         "section": section,
         "entries": chosen["entries"],
-        "lang": chosen.get("lang", ""),
+        "lang": chosen.get("lang") or _lang_from_url(url),
     }
