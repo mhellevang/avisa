@@ -1050,6 +1050,7 @@ def source_discover(query: str = Form(...)):
                     kind=prop["kind"],
                     url=prop["url"],
                     section=prop["section"],
+                    lang=prop.get("lang") or "en",
                     enabled=True,
                     config=prop.get("config"),
                 )

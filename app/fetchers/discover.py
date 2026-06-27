@@ -70,13 +70,26 @@ def _declared_feeds(base_url: str, html: str | None) -> list[str]:
     return feeds
 
 
-def _validate_feed(url: str) -> tuple[str, int] | None:
+# Map RSS/Atom language tags to the app's ISO codes. Feeds declare things like
+# "fr-FR", "en_US" or — for Norwegian — "nb"/"nn"/"no"; we collapse the regional
+# suffix and fold the Norwegian written-standard codes onto the app's "no".
+_LANG_ALIASES = {"nb": "no", "nn": "no", "nob": "no", "nno": "no"}
+
+
+def _norm_lang(raw: str) -> str:
+    """Normalize a feed <language> tag to a 2-letter ISO code, or "" if unknown."""
+    base = (raw or "").strip().lower().replace("_", "-").split("-")[0]
+    base = _LANG_ALIASES.get(base, base)
+    return base if base.isalpha() and len(base) == 2 else ""
+
+
+def _validate_feed(url: str) -> tuple[str, int, str] | None:
     txt = _fetch(url)
     if not txt:
         return None
     fp = feedparser.parse(txt)
     if fp.entries:
-        return (fp.feed.get("title", ""), len(fp.entries))
+        return (fp.feed.get("title", ""), len(fp.entries), _norm_lang(fp.feed.get("language", "")))
     return None
 
 
@@ -96,7 +109,7 @@ def discover_feeds(site_url: str) -> tuple[str | None, list[dict]]:
         seen.add(c)
         res = _validate_feed(c)
         if res:
-            working.append({"url": c, "title": res[0], "entries": res[1]})
+            working.append({"url": c, "title": res[0], "entries": res[1], "lang": res[2]})
         if len(working) >= 5:
             break
     return html, working
@@ -166,6 +179,7 @@ def propose(user_input: str) -> dict:
                     "url": guess["url"],
                     "section": guess.get("section") or "News",
                     "entries": res[1],
+                    "lang": res[2],
                 }
         # No feed to find: try to auto-detect a Playwright selector.
         pw = detect_playwright_source(site, title)
@@ -191,12 +205,13 @@ def propose(user_input: str) -> dict:
         name = best["title"] or title or urlparse(site).netloc
         section = "News"
 
-    entries = next((f["entries"] for f in feeds if f["url"] == url), feeds[0]["entries"])
+    chosen = next((f for f in feeds if f["url"] == url), feeds[0])
     return {
         "ok": True,
         "name": name.strip()[:80],
         "kind": "rss",
         "url": url,
         "section": section,
-        "entries": entries,
+        "entries": chosen["entries"],
+        "lang": chosen.get("lang", ""),
     }
