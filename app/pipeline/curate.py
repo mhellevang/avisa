@@ -47,14 +47,28 @@ def curate() -> int:
             if skipped:
                 print(f"[curate] skipped {skipped} behind paywall")
 
-        source_names = {src.id: src.name for src in s.exec(select(Source)).all()}
+        sources = s.exec(select(Source)).all()
+        source_names = {src.id: src.name for src in sources}
+        source_langs = {src.id: (src.lang or "") for src in sources}
+        # Sources we leave untranslated (skip list) should keep their editorial
+        # bits (reason/deck) in the story's own language, so the whole card reads
+        # in one language instead of a foreign-language subtitle on top.
+        plang = runtime_config.paper_lang()
+        keep_in_lang = {
+            a.id: lang_prompt_name(sl)
+            for a in rankable
+            if (sl := (source_langs.get(a.source_id) or "").strip().lower())
+            and sl != plang
+            and not runtime_config.should_translate(sl)
+        }
         ranked = curate_articles(
             rankable,
             runtime_config.preferences(),
             runtime_config.front_page_size(),
-            target=lang_prompt_name(runtime_config.paper_lang()),
+            target=lang_prompt_name(plang),
             source_names=source_names,
             today=utcnow().date().isoformat(),
+            keep_in_lang=keep_in_lang,
         )
         by_id = {a.id: a for a in candidates}
 

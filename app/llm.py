@@ -147,12 +147,17 @@ def _extract_json(text: Optional[str]):
 def curate_articles(
     articles, preferences: str, n: int, target: str = "English",
     source_names: Optional[dict] = None, today: str = "",
+    keep_in_lang: Optional[dict] = None,
 ) -> list[dict]:
     """Returns a list of {id, score, section, reason, deck} for the selected
-    stories. Section names, reasons and decks are written in `target`.
-    `source_names` maps source_id -> name so the editor can honour the
-    source-diversity cap and is included in the candidate listing."""
+    stories. Section names are always written in `target`. The per-story `reason`
+    and `deck` are written in `target` too, EXCEPT for stories whose id maps to a
+    language in `keep_in_lang` — those are sources we leave untranslated (skip
+    list), so their editorial bits stay in the story's own language and the whole
+    card reads in one language. `source_names` maps source_id -> name so the
+    editor can honour the source-diversity cap and is included in the listing."""
     source_names = source_names or {}
+    keep_in_lang = keep_in_lang or {}
     # Sort by recency and cap to a sensible number of candidates.
     cands = sorted(
         articles,
@@ -178,6 +183,7 @@ def curate_articles(
 
     listing = "\n".join(
         f"{a.id}\t[{a.section} · {_src(a)}] {a.title} — {(a.summary or '')[:180]}"
+        + (f"  ⟨reason+deck in {keep_in_lang[a.id]}⟩" if a.id in keep_in_lang else "")
         for a in cands
     )
     system = (
@@ -210,7 +216,9 @@ def curate_articles(
         + f"For the few most important stories (the likely lead and majors), also "
         f"write a one-sentence `deck` — an editorial subtitle that adds context "
         f"beyond the headline. Leave `deck` an empty string for minor stories.\n\n"
-        f"Write section names, reasons and decks in {target}.\n\n"
+        f"Write section names in {target}. Write each story's `reason` and `deck` "
+        f"in {target} too — EXCEPT for stories tagged ⟨reason+deck in X⟩, whose "
+        f"`reason` and `deck` must be written in X (the story's own language).\n\n"
         f"Candidates (id<TAB>[section · source] title — summary):\n{listing}\n\n"
         f'Respond ONLY with JSON of the form: '
         f'[{{"id": <int>, "score": <0-1>, "section": "<str>", "reason": "<str>", "deck": "<str>"}}]'
