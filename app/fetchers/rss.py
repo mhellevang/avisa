@@ -2,8 +2,9 @@ import re
 from datetime import datetime
 
 import feedparser
+import httpx
 
-from .base import RawArticle, strip_html
+from .base import USER_AGENT, RawArticle, strip_html
 
 # Trailing boilerplate many feeds append to the <description>: a "read more"
 # link (the Guardian's "Continue reading…") or a WordPress "The post … appeared
@@ -66,7 +67,19 @@ def _content(entry) -> str:
 
 
 def fetch_rss(url: str, limit: int = 40) -> list[RawArticle]:
-    feed = feedparser.parse(url)
+    # Fetch with httpx and feed the bytes to feedparser. Letting feedparser do
+    # the network call itself means urllib with NO timeout — one feed server
+    # that accepts the connection but never answers would hang the whole ingest
+    # run (and with it the pipeline lock) until the process is restarted.
+    # Errors propagate to ingest()'s per-source handler.
+    r = httpx.get(url, timeout=20.0, follow_redirects=True, headers={"User-Agent": USER_AGENT})
+    r.raise_for_status()
+    feed = feedparser.parse(r.content)
+    if not feed.entries:
+        # A 404/HTML page parses "successfully" to zero entries — say why the
+        # source looks empty instead of failing silently.
+        why = getattr(feed, "bozo_exception", "") if feed.bozo else "no entries"
+        print(f"[rss] empty feed {url}: {why}")
     out: list[RawArticle] = []
     for e in feed.entries[:limit]:
         link = e.get("link")

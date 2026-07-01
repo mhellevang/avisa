@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from sqlmodel import Field, SQLModel
@@ -7,7 +7,7 @@ from sqlmodel import Field, SQLModel
 def utcnow() -> datetime:
     """Naive UTC. We stick to naive datetimes everywhere so SQLite
     comparisons stay consistent."""
-    return datetime.utcnow()
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class Source(SQLModel, table=True):
@@ -19,8 +19,10 @@ class Source(SQLModel, table=True):
     enabled: bool = True
     # ISO language code for the source's content (e.g. "no", "en"). Controls
     # whether articles are translated: languages in the skip list (settings)
-    # are not translated.
-    lang: str = "en"
+    # are not translated. Empty = unknown, which should_translate treats as
+    # "translate" — never default to "en" here, or a foreign-language source
+    # ends up untranslated whenever the paper language is English.
+    lang: str = ""
     # Fetcher-specific config as a JSON string (e.g. link_selector for the
     # playwright listing). None for simple sources.
     config: Optional[str] = None

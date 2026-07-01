@@ -54,7 +54,11 @@ def provider_label() -> str:
     }.get(active_provider(), active_provider())
 
 
-def _chat_openrouter(model: str, system: str, user: str, max_tokens: int) -> Optional[str]:
+def _chat_openrouter(model: str, system: str, user: str, max_tokens: int) -> tuple[Optional[str], str]:
+    """Returns (content, finish_reason). finish_reason "length" means the reply
+    was cut off by max_tokens — a JSON reply is then guaranteed unparseable, so
+    callers can react (split the batch / raise the budget) instead of retrying
+    the identical call forever."""
     try:
         resp = httpx.post(
             OPENROUTER_URL,
@@ -74,10 +78,11 @@ def _chat_openrouter(model: str, system: str, user: str, max_tokens: int) -> Opt
             timeout=120.0,
         )
         resp.raise_for_status()
-        return resp.json()["choices"][0]["message"]["content"]
+        choice = resp.json()["choices"][0]
+        return choice["message"]["content"], (choice.get("finish_reason") or "")
     except Exception as e:
         print(f"[llm] openrouter failed ({model}): {e}")
-        return None
+        return None, ""
 
 
 def _chat_claude_cli(system: str, user: str) -> Optional[str]:
@@ -101,13 +106,18 @@ def _chat_claude_cli(system: str, user: str) -> Optional[str]:
         return None
 
 
-def _chat(model: str, system: str, user: str, max_tokens: int = 2000) -> Optional[str]:
+def _chat_ex(model: str, system: str, user: str, max_tokens: int = 2000) -> tuple[Optional[str], str]:
+    """(content, finish_reason) — finish_reason is "" when unknown (claude CLI)."""
     provider = active_provider()
     if provider == "openrouter":
         return _chat_openrouter(model, system, user, max_tokens)
     if provider == "claude_cli":
-        return _chat_claude_cli(system, user)
-    return None
+        return _chat_claude_cli(system, user), ""
+    return None, ""
+
+
+def _chat(model: str, system: str, user: str, max_tokens: int = 2000) -> Optional[str]:
+    return _chat_ex(model, system, user, max_tokens)[0]
 
 
 def _extract_json(text: Optional[str]):
@@ -148,9 +158,13 @@ def curate_articles(
     articles, preferences: str, n: int, target: str = "English",
     source_names: Optional[dict] = None, today: str = "",
     keep_in_lang: Optional[dict] = None,
-) -> list[dict]:
+) -> Optional[list[dict]]:
     """Returns a list of {id, score, section, reason, deck} for the selected
-    stories. Section names are always written in `target`. The per-story `reason`
+    stories, or None when the LLM was unavailable / unparseable — the caller
+    then keeps the previous selection instead of degrading to a raw latest-n
+    dump. Without any LLM configured (demo mode) the latest-n fallback is
+    still returned, so the app works end-to-end without a key.
+    Section names are always written in `target`. The per-story `reason`
     and `deck` are written in `target` too, EXCEPT for stories whose id maps to a
     language in `keep_in_lang` — those are sources we leave untranslated (skip
     list), so their editorial bits stay in the story's own language and the whole
@@ -225,18 +239,26 @@ def curate_articles(
     )
     data = _extract_json(_chat(settings.curate_model, system, user, max_tokens=3000))
     if not isinstance(data, list):
-        # Fallback if the LLM responds oddly.
-        top = cands[:n]
-        return [
-            {"id": a.id, "score": 0.5, "section": a.section,
-             "reason": i18n.current("Fallback selection"), "deck": ""}
-            for a in top
-        ]
-    # Clean up and cap.
+        # Transient failure (network, rate limit, garbled reply) — signal it so
+        # the caller can keep the previous selection.
+        return None
+    # Clean up and cap. Coerce ids to int (models drift into `"id": "123"`,
+    # which would silently match nothing) and drop duplicates so a repeated id
+    # can't eat two slots of the n cap.
     cleaned = []
+    seen: set[int] = set()
     for r in data:
-        if isinstance(r, dict) and "id" in r:
-            cleaned.append(r)
+        if not isinstance(r, dict):
+            continue
+        try:
+            rid = int(r.get("id"))
+        except (TypeError, ValueError):
+            continue
+        if rid in seen:
+            continue
+        seen.add(rid)
+        r["id"] = rid
+        cleaned.append(r)
     return cleaned[:n]
 
 
@@ -246,12 +268,13 @@ def curate_articles(
 _CODE_FENCE = re.compile(r"```.*?```", re.S)
 
 
-def _mask_code(text: str) -> tuple[str, list[str]]:
+def _mask_code(text: str, blocks: Optional[list[str]] = None) -> tuple[str, list[str]]:
     """Replaces fenced code blocks with sentinels before translation so the
     model never rewrites code (translating identifiers, reflowing lines, …).
     Returns the masked text and the removed blocks, restored with _restore_code.
-    """
-    blocks: list[str] = []
+    Pass `blocks` to accumulate across several texts in one call (batch)."""
+    if blocks is None:
+        blocks = []
 
     def repl(m: "re.Match") -> str:
         blocks.append(m.group(0))
@@ -286,6 +309,14 @@ def _restore_images(text: str, blocks: list[str]) -> str:
     return text
 
 
+def _cap_masked(text: str) -> str:
+    """Caps masked body text to translate_body_max_chars. The cap can land in
+    the middle of a ⟦CODEn⟧/⟦IMGn⟧ sentinel — strip such a severed tail so the
+    model never sees (and echoes back) a half sentinel."""
+    capped = text[: settings.translate_body_max_chars]
+    return re.sub(r"⟦[^⟧]*$", "", capped)
+
+
 def _translator_system(target: str, *, markdown: bool = False) -> str:
     """Shared system prompt for the translation calls. The model otherwise
     occasionally coins non-words (e.g. "Emergenesen" for "the emergence of") or
@@ -318,7 +349,7 @@ def translate_fields(
     masked, code_blocks = _mask_code(content or "")
     img_blocks: list[str] = []
     masked = _mask_images(masked, img_blocks)
-    body = masked[: settings.translate_body_max_chars]
+    body = _cap_masked(masked)
     system = _translator_system(target)
     user = (
         f"Translate the fields below to {target}. Keep line breaks in 'content'. "
@@ -348,14 +379,16 @@ def translate_batch(items: list[dict], target: str = "English") -> dict[int, dic
         return {}
 
     blocks = []
+    code_blocks: list[str] = []
     img_blocks: list[str] = []
     total_chars = 0
     for it in items:
-        # Mask images BEFORE capping so the char cap can never sever an image
-        # markdown mid-token (which would leave a dangling "![alt" in the output);
-        # same order as translate_fields/translate_body.
-        body = _mask_images(it.get("content") or "", img_blocks)
-        body = body[: settings.translate_body_max_chars]
+        # Mask code + images BEFORE capping so the char cap can never sever an
+        # image markdown mid-token (which would leave a dangling "![alt" in the
+        # output); same order as translate_fields/translate_body.
+        body, _ = _mask_code(it.get("content") or "", code_blocks)
+        body = _mask_images(body, img_blocks)
+        body = _cap_masked(body)
         total_chars += len(body) + len(it.get("summary") or "") + len(it.get("title") or "")
         blocks.append(
             f"=== ARTICLE {it['id']} ===\n"
@@ -372,14 +405,32 @@ def translate_batch(items: list[dict], target: str = "English") -> dict[int, dic
         + "\n\n".join(blocks)
     )
     max_tokens = min(8000, 1200 + int(total_chars * 0.6))
-    data = _extract_json(_chat(settings.translate_model, system, user, max_tokens=max_tokens))
+    content, finish = _chat_ex(settings.translate_model, system, user, max_tokens=max_tokens)
+    if finish == "length":
+        # The reply hit max_tokens, so the JSON is truncated and can never
+        # parse — retrying the identical batch next run would loop forever at
+        # full cost. Split the batch instead; a single article gets one retry
+        # with a doubled output budget.
+        if len(items) > 1:
+            mid = len(items) // 2
+            out = translate_batch(items[:mid], target)
+            out.update(translate_batch(items[mid:], target))
+            return out
+        print(f"[llm] translation of article {items[0]['id']} truncated — retrying with a larger budget")
+        content, finish = _chat_ex(settings.translate_model, system, user, max_tokens=16000)
+        if finish == "length":
+            print(f"[llm] article {items[0]['id']} still truncated — giving up this round")
+            return {}
+    data = _extract_json(content)
     out: dict[int, dict] = {}
     if isinstance(data, list):
         for d in data:
             if isinstance(d, dict) and "id" in d:
                 try:
                     if isinstance(d.get("content"), str):
-                        d["content"] = _restore_images(d["content"], img_blocks)
+                        d["content"] = _restore_images(
+                            _restore_code(d["content"], code_blocks), img_blocks
+                        )
                     out[int(d["id"])] = d
                 except (TypeError, ValueError):
                     continue
@@ -409,7 +460,14 @@ def translate_headlines_batch(items: list[dict], target: str = "English") -> dic
         + "\n\n".join(blocks)
     )
     max_tokens = min(4000, 600 + len(items) * 200)
-    data = _extract_json(_chat(settings.translate_model, system, user, max_tokens=max_tokens))
+    content, finish = _chat_ex(settings.translate_model, system, user, max_tokens=max_tokens)
+    if finish == "length" and len(items) > 1:
+        # Truncated JSON never parses — split instead of retrying the same call.
+        mid = len(items) // 2
+        out = translate_headlines_batch(items[:mid], target)
+        out.update(translate_headlines_batch(items[mid:], target))
+        return out
+    data = _extract_json(content)
     out: dict[int, dict] = {}
     if isinstance(data, list):
         for d in data:
@@ -430,7 +488,7 @@ def translate_body(title: str, content: str, target: str = "English") -> Optiona
     masked, code_blocks = _mask_code(content)
     img_blocks: list[str] = []
     masked = _mask_images(masked, img_blocks)
-    body = masked[: settings.translate_body_max_chars]
+    body = _cap_masked(masked)
     system = _translator_system(target, markdown=True)
     user = (
         f"Translate the body below to {target}. Keep line breaks and markdown headings. "

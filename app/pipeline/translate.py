@@ -95,13 +95,24 @@ def translate() -> int:
                 # text in. The UI falls back to the original (display_title, and the
                 # article page translates inline / lazy-loads the body on open).
                 continue
+            # A partial reply (id present but fields missing) must not freeze
+            # the ORIGINAL text in as "translated" — that would cache the wrong
+            # language forever. Require the fields we're caching; otherwise
+            # treat it as a miss and retry next run.
+            title = res.get("title")
+            content = res.get("content")
+            if not (isinstance(title, str) and title.strip()):
+                continue
+            if t["content"] and not (isinstance(content, str) and content.strip()):
+                continue
             a = s.get(Article, t["id"])
             if not a:
                 continue
-            a.title_no = res.get("title", t["title"])
-            a.summary_no = res.get("summary", t["summary"])
+            a.title_no = title
+            summary = res.get("summary")
+            a.summary_no = summary if isinstance(summary, str) else t["summary"]
             if t["content"]:
-                a.content_no = res.get("content", t["content"])
+                a.content_no = content
             a.translated_lang = plang
             a.translated_at = now
             translated += 1
@@ -156,11 +167,17 @@ def translate_pool_headlines() -> int:
             res = results.get(t["id"])
             if not res:
                 continue
+            # Same guard as translate(): a reply without an actual title must
+            # not freeze the original in as title_no.
+            title = res.get("title")
+            if not (isinstance(title, str) and title.strip()):
+                continue
             a = s.get(Article, t["id"])
             if not a:
                 continue
-            a.title_no = res.get("title", t["title"])
-            a.summary_no = res.get("summary", t["summary"])
+            a.title_no = title
+            summary = res.get("summary")
+            a.summary_no = summary if isinstance(summary, str) else t["summary"]
             a.translated_lang = plang
         s.commit()
 

@@ -1,6 +1,6 @@
 import html
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 import httpx
@@ -59,7 +59,8 @@ def _fetch_hn(url: str, limit: int) -> list[RawArticle]:
         published = None
         ts = hit.get("created_at_i")
         if ts:
-            published = datetime.utcfromtimestamp(ts)
+            # Naive UTC to match the rest of the system (utcfromtimestamp is deprecated).
+            published = datetime.fromtimestamp(ts, tz=timezone.utc).replace(tzinfo=None)
         points = hit.get("points", 0)
         comments = hit.get("num_comments", 0)
         out.append(

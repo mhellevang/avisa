@@ -1,11 +1,26 @@
+from sqlalchemy import event
 from sqlmodel import Session, SQLModel, create_engine
 
 from .config import settings
 
-connect_args = (
-    {"check_same_thread": False} if settings.database_url.startswith("sqlite") else {}
-)
+_is_sqlite = settings.database_url.startswith("sqlite")
+connect_args = {"check_same_thread": False} if _is_sqlite else {}
 engine = create_engine(settings.database_url, connect_args=connect_args)
+
+if _is_sqlite:
+
+    @event.listens_for(engine, "connect")
+    def _sqlite_pragmas(dbapi_conn, _record):
+        # The pipeline thread and the web workers write concurrently. In the
+        # default rollback-journal mode a long pipeline commit blocks readers
+        # and quickly yields "database is locked" in web requests; WAL lets
+        # readers run during a write, and busy_timeout makes writers wait
+        # instead of erroring.
+        cur = dbapi_conn.cursor()
+        cur.execute("PRAGMA journal_mode=WAL")
+        cur.execute("PRAGMA busy_timeout=15000")
+        cur.execute("PRAGMA synchronous=NORMAL")
+        cur.close()
 
 
 def init_db() -> None:

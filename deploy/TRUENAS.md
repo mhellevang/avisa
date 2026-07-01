@@ -10,9 +10,11 @@ The stack is two containers — `avisa` (the app, pulled from GHCR) and
 `cloudflared` (the tunnel). No Caddy, no reverse proxy. Defined in
 `docker-compose.truenas.yml`.
 
-> The database is just cached, reproducible news. A plain Docker volume is fine
-> — no ZFS dataset or snapshots needed. If you lose it, the paper rebuilds itself
-> over the next poll cycles.
+> The *news* in the database is reproducible cache — but the database also holds
+> your setup: paper title, curator profile, feedback signals, language choices and
+> any sources you've added or edited. Lose the volume and you redo onboarding.
+> A ZFS snapshot task on the volume's dataset (or an occasional copy of
+> `avisa.db`) is cheap insurance.
 
 Replace everywhere:
 - `avis.dittdomene.no` → your own (sub)domain (must be a zone in Cloudflare)
@@ -77,12 +79,11 @@ PREFERENCES=General news, technology, climate and science. Weight on analysis ov
 
 See `.env.example` for every available variable.
 
-> **Set `OPENROUTER_API_KEY` before the first deploy.** If the first edition builds
-> without it, the pipeline runs in demo mode and stamps the curated articles as
-> "translated" with their original (English) text — and never retries them, so the
-> front page stays English even after you add the key. Recovering means wiping the DB
-> volume and rebuilding. Set the key up front and the first edition is curated +
-> translated correctly.
+> **Set `OPENROUTER_API_KEY` before the first deploy.** Without it the first
+> edition builds in demo mode: no curation, no translation. Untranslated articles
+> are retried automatically once the key is in place, so nothing is stuck — but
+> the first impression is a raw, untranslated paper. Set the key up front and the
+> first edition is curated + translated correctly.
 
 ---
 

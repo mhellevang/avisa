@@ -18,11 +18,7 @@ import httpx
 import trafilatura
 
 from ..config import settings
-
-_UA = (
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36"
-)
+from .base import USER_AGENT as _UA
 
 
 # "Read also" / related-article widgets that papers splice into the body. In
@@ -188,9 +184,15 @@ def _dedupe_blocks(md: str) -> str:
 # most a stray timestamp; many standalone ones mean it's a live feed, not an
 # article — so we discard it rather than store the stream as the body.
 _LIVE_ENTRY = re.compile(
-    r"^(?:[A-Za-z]+day[ ,].*?\s)?"  # optional "Monday, June 1, 2026, " prefix
-    r"\d{1,2}(?:[:.]\d{2})?\s*(?:a\.m\.|p\.m\.|am|pm)$"  # 5 a.m. / 10:47 a.m.
-    r"|^(?:[A-Za-z]+day[ ,].*?\s)?\d{1,2}[:.]\d{2}$",  # 24h 10:47
+    # Tickers often render each timestamp as its own markdown heading ("## 10:47"),
+    # and non-English tickers write "10:47 Uhr" (German) or "kl. 10.47" (Norwegian) —
+    # all of these must count, not just the bare English forms.
+    r"^(?:#{1,6}\s*)?"                    # optional heading marker
+    r"(?:[A-Za-z]+day[ ,].*?\s)?"         # optional "Monday, June 1, 2026, " prefix
+    r"(?:"
+    r"(?:kl\.?\s*)?\d{1,2}[:.]\d{2}\s*(?:a\.m\.|p\.m\.|am|pm|uhr)?"  # 10:47 / kl. 10.47 / 10:47 Uhr
+    r"|\d{1,2}\s*(?:a\.m\.|p\.m\.|am|pm)"                            # hour-only "5 a.m."
+    r")$",
     re.I,
 )
 _LIVEBLOG_MIN_ENTRIES = 6
@@ -377,13 +379,17 @@ def _is_blocked(html: str) -> bool:
     return any(m in low for m in _BOT_WALL)
 
 
-def _is_paywalled(html: str) -> bool:
+def _is_paywalled(html: str, thin: bool = True) -> bool:
     if not html:
         return False
     low = html.lower()
     if re.search(r'"isaccessibleforfree"\s*:\s*(false|"false")', low):
         return True
-    return any(m in low for m in _PAYWALL_TEXT)
+    # The text markers are searched in the WHOLE document (nav, footer,
+    # newsletter banners, teasers for other stories), so on their own they
+    # misfire on fully open pages. Only trust them when extraction actually
+    # came up short — i.e. when a paywall plausibly withheld the body.
+    return thin and any(m in low for m in _PAYWALL_TEXT)
 
 
 def _result(html: str, url: str) -> dict:
@@ -396,7 +402,7 @@ def _result(html: str, url: str) -> dict:
     return {
         "content": text,
         "image": hero,
-        "paywalled": _is_paywalled(html),
+        "paywalled": _is_paywalled(html, thin=text is None),
     }
 
 

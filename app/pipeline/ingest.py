@@ -25,6 +25,10 @@ def _hash(url: str) -> str:
 _SKIP_URL_MARKERS = (
     "/live/",
     "/liveblog/",
+    "/live-blog/",
+    "liveticker",     # German/Swiss tickers (blick.ch, srf.ch, …)
+    "/direkte/",      # Norwegian live coverage (NRK, VG, …)
+    "live-updates",   # AP/NYT "…-live-updates" slugs
     "/video/",
     "/videos/",
     "/puzzles-and-games-dept/",

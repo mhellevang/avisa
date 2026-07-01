@@ -59,6 +59,10 @@ class Settings(BaseSettings):
 
     # DB
     database_url: str = "sqlite:///./avisa.db"
+    # Days to keep old editions and unreferenced articles. Without pruning the
+    # DB grows without bound (every pipeline run adds an edition). 0 = keep
+    # everything.
+    retention_days: int = 30
 
     # Login for the admin surfaces (/settings, sources, feedback, refresh).
     # Empty = no login (everything open — fine locally / behind a VPN).

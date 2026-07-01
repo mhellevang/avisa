@@ -60,8 +60,10 @@ def poll_minutes() -> int:
 
 
 def paper_lang() -> str:
-    """The paper's target language (ISO code)."""
-    return (get("paper_lang") or "no").strip().lower()
+    """The paper's target language (ISO code). An empty stored value falls back
+    to the env default (same source DEFAULTS uses), so a missing key and an
+    empty key behave identically."""
+    return (get("paper_lang") or settings.paper_lang or "en").strip().lower()
 
 
 def topic_keys() -> list[str]:

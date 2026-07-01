@@ -7,6 +7,7 @@ Run in two places in the pipeline:
 """
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import timedelta
 
 from sqlmodel import select
 
@@ -21,8 +22,11 @@ from ..models import Article, utcnow
 
 def _run_fetch(targets: list[tuple[int, str]]) -> int:
     """targets: list of (article_id, url). Fetches full text and writes it back.
-    Marks content_fetched_at on all attempted (including those that fail) so we don't
-    retry in an endless loop."""
+    Marks content_fetched_at on everything that got a response (even a thin one,
+    so we don't retry those in an endless loop) — but NOT on network failures,
+    so a story isn't permanently classed as "no full text" just because the
+    site (or the network) was down in one run. Retries are bounded by the
+    48h window in fetch_new_content."""
     if not targets:
         return 0
 
@@ -71,15 +75,18 @@ def _run_fetch(targets: list[tuple[int, str]]) -> int:
             obj = s.get(Article, aid)
             if not obj:
                 continue
-            res = results.get(aid) or {}
+            res = results.get(aid)
+            if res is None:
+                # Both passes errored out (network down, browser unavailable):
+                # leave content_fetched_at unset so the next run retries.
+                continue
             if res.get("content"):
                 obj.content = res["content"]
                 got_text += 1
             # og:image is usually better than the RSS thumbnail — prefer it.
             if res.get("image"):
                 obj.image_url = res["image"]
-            if res:
-                obj.paywalled = bool(res.get("paywalled"))
+            obj.paywalled = bool(res.get("paywalled"))
             obj.content_fetched_at = now
         s.commit()
 
@@ -89,12 +96,19 @@ def _run_fetch(targets: list[tuple[int, str]]) -> int:
 
 def fetch_new_content(limit: int | None = None) -> int:
     """Full text for the newest stories not attempted before, capped at
-    content_fetch_limit. Logs how many were deferred to the next run."""
+    content_fetch_limit. Logs how many were deferred to the next run.
+    Limited to the curation window (48h): older stories can't reach the front
+    page anyway, and without the bound, permanently unfetchable URLs (dead
+    site) would occupy the batch cap on every run."""
     limit = limit or settings.content_fetch_limit
     with get_session() as s:
+        cutoff = utcnow() - timedelta(hours=48)
         rows = s.exec(
             select(Article)
-            .where(Article.content_fetched_at == None)  # noqa: E711
+            .where(
+                Article.content_fetched_at == None,  # noqa: E711
+                Article.fetched_at >= cutoff,
+            )
             .order_by(Article.fetched_at.desc())
         ).all()
         targets = [(a.id, a.url) for a in rows]

@@ -32,7 +32,8 @@ def seed_sources() -> int:
                     kind=row["kind"],
                     url=row["url"],
                     section=row.get("section", "News"),
-                    lang=row.get("lang", "en"),
+                    # Empty = unknown → translated by default (see models.Source).
+                    lang=row.get("lang", "") or "",
                     enabled=row.get("enabled", True),
                     config=json.dumps(cfg) if cfg else None,
                 )

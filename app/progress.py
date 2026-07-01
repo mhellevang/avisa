@@ -52,12 +52,14 @@ def detail(text: str) -> None:
 
 
 def finish(result: dict | None) -> None:
+    from . import i18n  # lazy: avoids an import cycle
+
     with _lock:
         dur = time.time() - _state["started"] if _state["started"] else None
         _state.update(
             running=False,
             stage="done",
-            message="Done.",
+            message=i18n.current("Done."),
             detail="",
             last_duration=round(dur, 1) if dur else None,
             last_finished=time.time(),

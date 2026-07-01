@@ -9,10 +9,7 @@ from urllib.parse import urljoin, urlparse
 import feedparser
 import httpx
 
-_UA = (
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36"
-)
+from .base import USER_AGENT as _UA
 
 # Common feed paths to try if the site doesn't declare a <link>.
 _COMMON_PATHS = [
@@ -209,9 +206,12 @@ def propose(user_input: str) -> dict:
             ),
         }
 
-    # Let the LLM choose the best feed + name + section if available.
+    # Let the LLM choose the best feed + name + section if available. Only
+    # accept a URL that is actually in the validated list — the model can
+    # hallucinate a variant, which would create a source with a dead feed.
+    valid_urls = {f["url"] for f in feeds}
     choice = llm.choose_source(site, title, feeds, target=target)
-    if choice and choice.get("url"):
+    if choice and choice.get("url") in valid_urls:
         url = choice["url"]
         name = choice.get("name") or title or urlparse(site).netloc
         section = choice.get("section") or "News"
@@ -221,7 +221,7 @@ def propose(user_input: str) -> dict:
         name = best["title"] or title or urlparse(site).netloc
         section = "News"
 
-    chosen = next((f for f in feeds if f["url"] == url), feeds[0])
+    chosen = next(f for f in feeds if f["url"] == url)
     return {
         "ok": True,
         "name": name.strip()[:80],

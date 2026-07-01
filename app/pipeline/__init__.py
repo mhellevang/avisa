@@ -11,6 +11,7 @@ from .build import build_edition
 from .content import fetch_new_content, fetch_selected_content
 from .curate import curate
 from .ingest import ingest
+from .prune import prune
 from .translate import translate, translate_pool_headlines
 
 # A single pipeline run at a time. run_pipeline is triggered from many places
@@ -55,6 +56,7 @@ def _run_pipeline() -> dict:
 
         progress.stage("build", i18n.current("Assembling the edition …"), 6, N)
         edition_id = build_edition()
+        prune()
 
         result = {
             "new": new,

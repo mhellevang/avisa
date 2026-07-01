@@ -3,6 +3,13 @@ from datetime import datetime
 from html.parser import HTMLParser
 from typing import Optional
 
+# Browser-like User-Agent shared by every HTTP fetcher — some sites block
+# library defaults (python-httpx/feedparser UAs).
+USER_AGENT = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36"
+)
+
 
 @dataclass
 class RawArticle:

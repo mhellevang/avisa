@@ -1,0 +1,17 @@
+# The Dockerfile does COPY . . — without this file a locally built image bakes
+# in secrets (.env), the local database and the venv, and docker-compose.yml
+# tags local builds as the same ghcr.io tag CI pushes.
+.git
+.github
+.venv
+venv
+__pycache__
+*.pyc
+*.db
+*.log
+.env
+.env.*
+.avisa.pid
+.DS_Store
+deploy
+docker-compose*.yml

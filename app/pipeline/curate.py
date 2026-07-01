@@ -12,7 +12,9 @@ from ..models import Article, Source, utcnow
 
 def curate() -> int:
     """Selects front-page stories from recent articles. Resets the previous selection
-    within the window and marks the newly selected ones."""
+    and marks the newly selected ones. If the LLM is unavailable, the previous
+    selection is kept untouched (better a slightly stale front page than a raw
+    latest-n dump that also triggers translation costs)."""
     with get_session() as s:
         cutoff = utcnow() - timedelta(hours=48)
         candidates = s.exec(
@@ -23,10 +25,6 @@ def curate() -> int:
             return 0
 
         progress.detail(current("Assessing {n} stories against the profile …", n=len(candidates)))
-
-        # Reset the selection within the window before re-curating.
-        for a in candidates:
-            a.selected = False
 
         # Exclude stories without real body text (e.g. live-blog snippets that didn't
         # yield full text in the content phase). Without this, an empty story could end
@@ -70,6 +68,19 @@ def curate() -> int:
             today=utcnow().date().isoformat(),
             keep_in_lang=keep_in_lang,
         )
+        if ranked is None:
+            # Transient LLM failure (network, rate limit, garbled JSON): keep
+            # the previous selection instead of replacing it with a fallback.
+            kept = len(s.exec(select(Article).where(Article.selected == True)).all())  # noqa: E712
+            print(f"[curate] LLM unavailable — keeping the previous selection ({kept} stories)")
+            return kept
+
+        # Reset ALL previously selected articles, not just the ones inside the
+        # candidate window — a story that ages past the window while selected
+        # would otherwise never be reset and stay in every future edition.
+        for a in s.exec(select(Article).where(Article.selected == True)).all():  # noqa: E712
+            a.selected = False
+
         by_id = {a.id: a for a in candidates}
 
         chosen = 0

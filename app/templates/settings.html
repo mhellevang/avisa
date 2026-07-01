@@ -121,6 +121,7 @@
         <td>
           <form action="/sources/{{ src.id }}/lang" method="post" class="lang-form">
             <select name="lang" onchange="this.form.requestSubmit()">
+              <option value=""{% if not src.lang %} selected{% endif %}>?</option>
               {% for code, label in source_lang_options %}
               <option value="{{ code }}"{% if code == src.lang %} selected{% endif %}>{{ code }}</option>
               {% endfor %}
@@ -130,7 +131,10 @@
         <td>{{ t("On") if src.enabled else t("Off") }}</td>
         <td class="src-actions">
           <form action="/sources/{{ src.id }}/toggle" method="post"><button type="submit">{{ t("Turn off") if src.enabled else t("Turn on") }}</button></form>
-          <form action="/sources/{{ src.id }}/delete" method="post" onsubmit="return confirm('{{ src.name }}?')"><button type="submit" class="danger">{{ t("Delete") }}</button></form>
+          {# tojson (in a single-quoted attribute) — interpolating the name into
+             a JS string literal lets a quote in a feed-supplied source name
+             break out of it (script injection / broken confirm). #}
+          <form action="/sources/{{ src.id }}/delete" method="post" onsubmit='return confirm({{ (src.name ~ "?") | tojson }})'><button type="submit" class="danger">{{ t("Delete") }}</button></form>
         </td>
       </tr>
       {% else %}
@@ -189,8 +193,9 @@
         <label>{{ t("Section") }} <input type="text" name="section" value="News"></label>
         <label>{{ t("Language") }}
           <select name="lang">
+            <option value="" selected>?</option>
             {% for code, label in source_lang_options %}
-            <option value="{{ code }}"{% if code == 'en' %} selected{% endif %}>{{ code }}</option>
+            <option value="{{ code }}">{{ code }}</option>
             {% endfor %}
           </select>
         </label>

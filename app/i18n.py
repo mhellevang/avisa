@@ -222,6 +222,12 @@ CATALOG: dict[str, dict[str, str]] = {
         "Add selected": "Legg til valgte",
         "Added {n} sources.": "La til {n} kilder.",
         "No new sources added.": "Ingen nye kilder lagt til.",
+        "✓ Added «{name}» — {kind} in {section}, {n} stories found.":
+            "✓ La til «{name}» — {kind} i {section}, fant {n} saker.",
+        "Couldn't figure out the source.": "Klarte ikke å finne ut av kilden.",
+        "Unknown source type «{kind}».": "Ukjent kildetype «{kind}».",
+        "Invalid JSON in config — the source was not added.":
+            "Ugyldig JSON i config — kilden ble ikke lagt til.",
     },
 }
 

@@ -11,6 +11,7 @@ from . import llm, runtime_config
 from .db import get_session, init_db
 from .fetchers import discover
 from .models import Source
+from .routes.sources import add_source
 
 
 def _ask(prompt: str, default: str = "") -> str:
@@ -31,18 +32,9 @@ def _add_by_discovery(query: str) -> None:
     """Smart setup: figure out a bare URL/domain."""
     prop = discover.propose(query)
     if prop.get("ok"):
-        with get_session() as s:
-            s.add(
-                Source(
-                    name=prop["name"],
-                    kind=prop["kind"],
-                    url=prop["url"],
-                    section=prop["section"],
-                    enabled=True,
-                    config=prop.get("config"),
-                )
-            )
-            s.commit()
+        # Shared inserter — also carries the detected language (a missing lang
+        # used to default the source to "en" and skip translation).
+        add_source(prop)
         print(f"    ✓ {prop['name']} — {prop['kind'].upper()} in {prop['section']} "
               f"({prop['entries']} stories)")
     else:

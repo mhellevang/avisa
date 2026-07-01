@@ -5,6 +5,7 @@ from datetime import datetime
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from . import progress, runtime_config
+from .models import utcnow
 from .pipeline import run_pipeline
 
 _scheduler: BackgroundScheduler | None = None
@@ -26,7 +27,7 @@ def refresh_if_stale(built_at: datetime | None) -> bool:
         return False
     max_age = runtime_config.poll_minutes() * 60
     if built_at is not None:
-        age = (datetime.utcnow() - built_at).total_seconds()
+        age = (utcnow() - built_at).total_seconds()
         if age < max_age:
             return False
     with _kick_lock:
