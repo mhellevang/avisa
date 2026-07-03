@@ -214,11 +214,11 @@ def debug_refetch(article_id: int):
         a = s.get(Article, article_id)
         if not a:
             return JSONResponse({"error": "not found"}, status_code=404)
-        url = a.url
+        url, title = a.url, a.title
     # Local import: pulls in the browser stack, keep it off the module load path.
     from ..pipeline.content import _run_fetch
 
-    got = _run_fetch([(article_id, url)])
+    got = _run_fetch([(article_id, url, title)])
     with get_session() as s:
         a = s.get(Article, article_id)
         if not a:  # deleted while we were fetching (e.g. by pruning)
@@ -237,11 +237,11 @@ def debug_reprocess(article_id: int):
         a = s.get(Article, article_id)
         if not a:
             return JSONResponse({"error": "not found"}, status_code=404)
-        url = a.url
+        url, title = a.url, a.title
     # Local import: pulls in the browser stack, keep it off the module load path.
     from ..pipeline.content import _run_fetch
 
-    got = _run_fetch([(article_id, url)])
+    got = _run_fetch([(article_id, url, title)])
 
     retranslated = False
     with get_session() as s:

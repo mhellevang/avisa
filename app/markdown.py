@@ -115,7 +115,9 @@ def body_html(md: str) -> str:
             code.append(raw)
             continue
         line = raw.strip()
-        if not line:
+        if not line or line in ("**", "*"):
+            # A lone bold/italic marker (photo-credit split across lines in old
+            # extractions) would render literally — treat it as a blank line.
             flush_list()
             flush_table()
             continue

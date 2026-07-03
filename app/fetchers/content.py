@@ -11,6 +11,7 @@ is usually high-resolution, much better than the RSS thumbnails.
 """
 
 import re
+from html import unescape
 from typing import Optional
 from urllib.parse import urljoin
 
@@ -36,28 +37,45 @@ _READ_ALSO = {
 }
 
 
+# The related headline after a "read also" marker comes in three shapes: a
+# markdown heading, a bare [headline](url) link line, or (e.g. Digi.no) a plain
+# short text line — often preceded by the related story's teaser image.
+_IMG_ONLY_LINE = re.compile(r"^!\[[^\]]*\]\([^)]*\)$")
+_LINK_ONLY_LINE = re.compile(r"^\[[^\]]+\]\([^)]*\)$")
+
+
 def _clean_markdown(md: str) -> str:
     """Drops 'read also' related-article blocks and collapses blank runs.
-    A marker line (e.g. 'Les også') and the related headline that follows it
-    (rendered as a markdown heading) are both removed."""
+    A marker line (e.g. 'Les også' / 'Les også:'), any teaser image below it,
+    and the related headline that follows (a heading, a bare link, or a short
+    plain line) are all removed."""
     lines = md.split("\n")
     out: list[str] = []
-    drop_next_heading = False
-    for line in lines:
-        stripped = line.strip()
-        bare = stripped.lstrip("#").strip().lower()
+    i, n = 0, len(lines)
+    while i < n:
+        stripped = lines[i].strip()
+        bare = stripped.lstrip("#").strip().rstrip(":").strip().lower()
         if bare in _READ_ALSO:
-            # Marker line — skip it and the related headline that follows.
-            drop_next_heading = True
+            i += 1
+            # Skip blanks and the related story's teaser image(s).
+            while i < n and (
+                not lines[i].strip() or _IMG_ONLY_LINE.match(lines[i].strip())
+            ):
+                i += 1
+            # The related headline itself. A short line without sentence-ending
+            # punctuation is a headline, not prose — genuine paragraphs after a
+            # mid-article marker are long and end with punctuation.
+            if i < n:
+                s = lines[i].strip()
+                if (
+                    s.startswith("#")
+                    or _LINK_ONLY_LINE.match(s)
+                    or (len(s) <= 120 and not s.endswith((".", "!", "?", "…")))
+                ):
+                    i += 1
             continue
-        if drop_next_heading:
-            if not stripped:
-                continue  # blank between marker and headline
-            if stripped.startswith("#"):
-                drop_next_heading = False
-                continue  # the related headline itself
-            drop_next_heading = False
-        out.append(line)
+        out.append(lines[i])
+        i += 1
     # Collapse runs of blank lines left behind by the removals.
     cleaned: list[str] = []
     for line in out:
@@ -65,6 +83,76 @@ def _clean_markdown(md: str) -> str:
             continue
         cleaned.append(line)
     return "\n".join(cleaned).strip()
+
+
+# Page-chrome line noise that survives extraction:
+# - NPR's image-carousel controls leak "hide caption" / "toggle caption" tokens
+#   (the latter glued to the first body paragraph) and stray '**' lines from a
+#   bold photo-credit split across lines.
+# - The Guardian leaves the accessibility skip-link of its newsletter signup
+#   box as a bare line ("skip past newsletter promotion" → #EmailSignup-skip-link).
+_CAPTION_TOKENS = re.compile(r"\*\*\s*(?:hide|toggle) caption\s*\*\*|\b(?:hide|toggle) caption\b", re.I)
+_PROMO_LINE = re.compile(
+    r"^\[?(?:skip past|after) (?:the )?newsletter promotion\b|emailsignup-skip-link",
+    re.I,
+)
+
+
+def _strip_chrome_lines(md: str) -> str:
+    out: list[str] = []
+    for line in md.split("\n"):
+        line = _CAPTION_TOKENS.sub("", line)
+        stripped = line.strip()
+        if stripped in ("**", "*"):
+            continue  # orphaned bold/italic marker from a split caption block
+        if _PROMO_LINE.search(stripped):
+            continue
+        out.append(line)
+    return "\n".join(out)
+
+
+# Trailing reference/boilerplate sections (notably ScienceDaily): "Story
+# Source:", "Journal Reference:", "Cite This Page:" — everything from the first
+# such label line to the end is citation chrome, not article text.
+_TAIL_LABELS = {
+    "story source",
+    "journal reference",
+    "journal references",
+    "cite this page",
+    "related stories",
+}
+
+
+def _strip_trailing_sections(md: str) -> str:
+    lines = md.split("\n")
+    for i, line in enumerate(lines):
+        s = line.strip()
+        if len(s) > 40:
+            continue
+        bare = s.lstrip("#").strip().strip("*").strip().rstrip(":").strip().lower()
+        if i > 0 and bare in _TAIL_LABELS:
+            return "\n".join(lines[:i]).strip()
+    return md
+
+
+def _norm_title(s: str) -> str:
+    return re.sub(r"[\W_]+", "", s).casefold()
+
+
+def _strip_title_heading(md: str, title: str) -> str:
+    """Drops a leading heading that repeats the article title — the article
+    page already renders the title above the body, so it shows twice. A leading
+    level-1 heading is always the page's own title (the site's H1 may be edited
+    away from the feed title, e.g. Aftenposten), so it goes regardless; deeper
+    levels only when they match the known title."""
+    lines = md.split("\n")
+    first = lines[0].strip() if lines else ""
+    if not first.startswith("#"):
+        return md
+    is_h1 = not first.startswith("##")
+    if is_h1 or (title and _norm_title(first.lstrip("#")) == _norm_title(title)):
+        return "\n".join(lines[1:]).strip()
+    return md
 
 
 # "Recommended Stories" / related-article widgets that papers (notably Al
@@ -233,8 +321,10 @@ def _unwrap_img_links(html: str) -> str:
 
 # Junk images: logos, placeholders, sprites, tracking pixels, avatars, ad slots —
 # never article content. Shared by the inline-image and og:image filters.
+# 'default' must not match a bare path segment (NPR's CDN routes every real
+# photo through /dims3/default/strip/…) — only default.jpg / og-default etc.
 _JUNK_IMG = re.compile(
-    r"default|placeholder|logo|fallback|share[_-]?image|sprite|/icons?/|avatar|/ads?/|pixel|1x1|spacer",
+    r"default(?![a-z/])|placeholder|logo|fallback|share[_-]?image|sprite|/icons?/|avatar|/ads?/|pixel|1x1|spacer",
     re.I,
 )
 
@@ -281,9 +371,21 @@ def _clean_images(md: str, base_url: str, hero_url: Optional[str] = None) -> str
     return _MD_IMG.sub(repl, md)
 
 
-def _extract_text(html: str, url: str, hero_url: Optional[str] = None) -> Optional[str]:
+# <small> is fine-print by definition — in article bodies it's the photo
+# credit inside <figcaption> (NRK: <small>Foto: X / NRK</small>). trafilatura
+# glues its text onto the next paragraph with no separator ("… / NRKHan mener …"),
+# so drop the element before extraction. The closing tag may wrap its '>' onto
+# the next line (NRK writes '</small\n>'), and the content is capped so an
+# unclosed tag can never swallow a chunk of the article.
+_SMALL_TAG = re.compile(r"<small\b[^>]*>.{0,400}?</small\s*>", re.I | re.S)
+
+
+def _extract_text(
+    html: str, url: str, hero_url: Optional[str] = None, title: str = ""
+) -> Optional[str]:
     if not html:
         return None
+    html = _SMALL_TAG.sub(" ", html)
     html = _unwrap_img_links(html)
     try:
         text = trafilatura.extract(
@@ -308,10 +410,13 @@ def _extract_text(html: str, url: str, hero_url: Optional[str] = None) -> Option
         return None
     if not text:
         return None
+    text = _strip_chrome_lines(text)
     cleaned = (
         _dedupe_blocks(_strip_metadata_header(_strip_related_lists(_clean_markdown(text))))
         or None
     )
+    if cleaned:
+        cleaned = _strip_trailing_sections(_strip_title_heading(cleaned, title)) or None
     if cleaned:
         # Strip: dropping a leading duplicate-of-hero image leaves blank lines.
         cleaned = _clean_images(cleaned, url, hero_url).strip() or None
@@ -333,7 +438,9 @@ def _og_image(html: str, url: str) -> Optional[str]:
         if m:
             c = re.search(r"content=[\"']([^\"']+)[\"']", m.group(0), re.I)
             if c and c.group(1).strip():
-                img = urljoin(url, c.group(1).strip())
+                # Attribute values are HTML-escaped — unescape or the query
+                # string keeps literal '&amp;' and the params come out mangled.
+                img = urljoin(url, unescape(c.group(1).strip()))
                 # Skip obvious placeholders/logos — in that case the RSS image is better.
                 if _JUNK_IMG.search(img):
                     return None
@@ -383,7 +490,9 @@ def _is_paywalled(html: str, thin: bool = True) -> bool:
     if not html:
         return False
     low = html.lower()
-    if re.search(r'"isaccessibleforfree"\s*:\s*(false|"false")', low):
+    # Tolerate backslash-escaped quotes: many sites (e.g. Digi.no) embed the
+    # schema.org JSON-LD inside a JS string, so it reads \"isAccessibleForFree\":\"False\".
+    if re.search(r'\\?"isaccessibleforfree\\?"\s*:\s*\\?"?false', low):
         return True
     # The text markers are searched in the WHOLE document (nav, footer,
     # newsletter banners, teasers for other stories), so on their own they
@@ -392,11 +501,12 @@ def _is_paywalled(html: str, thin: bool = True) -> bool:
     return thin and any(m in low for m in _PAYWALL_TEXT)
 
 
-def _result(html: str, url: str) -> dict:
+def _result(html: str, url: str, title: str = "") -> dict:
     """{content, image, paywalled} from HTML. content is None if too short or if
-    the page is a bot-wall/JS-challenge interstitial rather than the article."""
+    the page is a bot-wall/JS-challenge interstitial rather than the article.
+    title (when known) lets extraction drop a body-leading duplicate heading."""
     hero = _og_image(html, url)
-    text = None if _is_blocked(html) else _extract_text(html, url, hero)
+    text = None if _is_blocked(html) else _extract_text(html, url, hero, title)
     if text and len(text) < settings.content_min_chars:
         text = None
     return {
@@ -406,19 +516,19 @@ def _result(html: str, url: str) -> dict:
     }
 
 
-def extract_static(url: str) -> Optional[dict]:
+def extract_static(url: str, title: str = "") -> Optional[dict]:
     """Fetches and extracts text + image without a browser. None if the fetch fails."""
     try:
         r = httpx.get(url, timeout=20.0, follow_redirects=True, headers={"User-Agent": _UA})
         r.raise_for_status()
     except Exception:
         return None
-    return _result(r.text, url)
+    return _result(r.text, url, title)
 
 
-def extract_rendered(browser, url: str) -> Optional[dict]:
+def extract_rendered(browser, url: str, title: str = "") -> Optional[dict]:
     """Extracts text + image from a Playwright-rendered page."""
     html = browser.render(url)
     if not html:
         return None
-    return _result(html, url)
+    return _result(html, url, title)

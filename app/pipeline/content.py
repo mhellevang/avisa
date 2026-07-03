@@ -20,8 +20,9 @@ from ..fetchers.content import extract_rendered, extract_static
 from ..models import Article, utcnow
 
 
-def _run_fetch(targets: list[tuple[int, str]]) -> int:
-    """targets: list of (article_id, url). Fetches full text and writes it back.
+def _run_fetch(targets: list[tuple[int, str, str]]) -> int:
+    """targets: list of (article_id, url, title). Fetches full text and writes it
+    back; the title lets extraction drop a body-leading duplicate heading.
     Marks content_fetched_at on everything that got a response (even a thin one,
     so we don't retry those in an endless loop) — but NOT on network failures,
     so a story isn't permanently classed as "no full text" just because the
@@ -35,7 +36,7 @@ def _run_fetch(targets: list[tuple[int, str]]) -> int:
 
     # 1) Static pass in parallel
     with ThreadPoolExecutor(max_workers=8) as ex:
-        futs = {ex.submit(extract_static, url): aid for aid, url in targets}
+        futs = {ex.submit(extract_static, url, title): aid for aid, url, title in targets}
         done = 0
         for f in as_completed(futs):
             aid = futs[f]
@@ -50,14 +51,16 @@ def _run_fetch(targets: list[tuple[int, str]]) -> int:
 
     # 2) Playwright fallback for those that didn't get body text statically
     misses = [
-        (aid, url) for aid, url in targets if not (results.get(aid) or {}).get("content")
+        (aid, url, title)
+        for aid, url, title in targets
+        if not (results.get(aid) or {}).get("content")
     ]
     if misses and settings.use_playwright and playwright_available():
         try:
             with BrowserSession() as bs:
-                for i, (aid, url) in enumerate(misses, 1):
+                for i, (aid, url, title) in enumerate(misses, 1):
                     progress.detail(current("Rendering JS page {i}/{total} …", i=i, total=len(misses)))
-                    res = extract_rendered(bs, url)
+                    res = extract_rendered(bs, url, title)
                     if res:
                         # Keep any image from the static pass if the rendered one is missing.
                         prev = results.get(aid) or {}
@@ -71,7 +74,7 @@ def _run_fetch(targets: list[tuple[int, str]]) -> int:
     now = utcnow()
     got_text = 0
     with get_session() as s:
-        for aid, _url in targets:
+        for aid, _url, _title in targets:
             obj = s.get(Article, aid)
             if not obj:
                 continue
@@ -111,7 +114,7 @@ def fetch_new_content(limit: int | None = None) -> int:
             )
             .order_by(Article.fetched_at.desc())
         ).all()
-        targets = [(a.id, a.url) for a in rows]
+        targets = [(a.id, a.url, a.title) for a in rows]
 
     total = len(targets)
     batch = targets[:limit]
@@ -132,5 +135,5 @@ def fetch_selected_content() -> int:
                 Article.content_fetched_at == None,  # noqa: E711
             )
         ).all()
-        targets = [(a.id, a.url) for a in rows]
+        targets = [(a.id, a.url, a.title) for a in rows]
     return _run_fetch(targets)
