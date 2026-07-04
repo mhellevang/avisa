@@ -107,31 +107,33 @@ def _article_debug(s, a: Article, full: bool = False) -> dict:
     }
 
 
-def _force_retranslate(s, a: Article) -> bool:
+def _force_retranslate(s, a: Article) -> dict:
     """Re-translates title/summary/body for one article, overwriting the cache.
-    Returns True if anything was actually re-translated; on total failure the
-    cache (and translated_at) is left untouched so pipeline retries still work."""
+    Returns per-part status — {"title": bool, "body": bool | None} (body None =
+    nothing to translate) — so a silently failed body translation isn't masked
+    by a successful title. A failed part keeps its cached value, and on total
+    failure translated_at is left untouched so pipeline retries still work."""
     plang = runtime_config.paper_lang()
     target = i18n.lang_prompt_name(plang)
-    ok = False
+    status = {"title": False, "body": None}
     fields = llm.translate_fields(a.title, a.summary or "", target=target)
     title = (fields or {}).get("title")
     if isinstance(title, str) and title.strip():
         a.title_no = title
         summary = fields.get("summary")
         a.summary_no = summary if isinstance(summary, str) else a.summary
-        ok = True
+        status["title"] = True
     if a.content:
         translated = llm.translate_body(a.display_title, a.content, target=target)
+        status["body"] = bool(translated)
         if translated:
             a.content_no = translated
-            ok = True
-    if ok:
+    if status["title"] or status["body"]:
         a.translated_lang = plang
         a.translated_at = utcnow()
         s.commit()
         s.refresh(a)
-    return ok
+    return status
 
 
 @router.get("/article/{article_id}")
@@ -243,7 +245,7 @@ def debug_reprocess(article_id: int):
 
     got = _run_fetch([(article_id, url, title)])
 
-    retranslated = False
+    retranslated = None  # LLM disabled → translation not attempted
     with get_session() as s:
         a = s.get(Article, article_id)
         if not a:  # deleted while we were fetching (e.g. by pruning)
