@@ -1,5 +1,7 @@
 import hashlib
 import json
+import re
+from urllib.parse import urlsplit
 
 from sqlmodel import select
 
@@ -22,23 +24,35 @@ def _hash(url: str) -> str:
 #   puzzles  — crosswords/games (e.g. New Yorker /puzzles-and-games-dept/),
 #              whose "body" is only clue lists, not prose
 #   /cartoons/ — New Yorker daily cartoon, whose "body" is just the caption
-_SKIP_URL_MARKERS = (
-    "/live/",
-    "/liveblog/",
-    "/live-blog/",
-    "liveticker",     # German/Swiss tickers (blick.ch, srf.ch, …)
-    "/direkte/",      # Norwegian live coverage (NRK, VG, …)
-    "live-updates",   # AP/NYT "…-live-updates" slugs
-    "/video/",
-    "/videos/",
-    "/puzzles-and-games-dept/",
-    "/crossword/",
-    "/cartoons/",
-)
+# Whole PATH SEGMENTS (between slashes) that mark a non-article page. Matched by
+# segment equality — never as a raw substring of the whole URL — so a real story
+# whose slug merely CONTAINS one of these words ("…he-came-alive…", a query
+# param, a host) isn't silently dropped at ingest.
+_SKIP_SEGMENTS = {
+    "live", "liveblog", "live-blog",
+    "direkte",        # Norwegian live coverage (NRK, VG, …)
+    "video", "videos",
+    "puzzles-and-games-dept",
+    "crossword",
+    "cartoons",
+}
+# Slug patterns (a segment containing the token bounded by '-' or ends):
+# AP/NYT "…-live-updates" and German/Swiss "liveticker-…" tickers.
+_SKIP_SEGMENT_RE = re.compile(r"(?:^|-)(?:live-updates|liveticker)(?:-|$)")
+# Video hosts: a bare link to one of these (Hacker News submits many) is a clip,
+# not an article — its "body" is only a caption, so it can never read well.
+_VIDEO_HOSTS = ("youtube.com", "youtu.be", "vimeo.com", "tiktok.com")
 
 
 def _is_non_article(url: str) -> bool:
-    return any(marker in url for marker in _SKIP_URL_MARKERS)
+    parts = urlsplit(url)
+    host = parts.netloc.lower()
+    if any(h in host for h in _VIDEO_HOSTS):
+        return True
+    for seg in (s for s in parts.path.lower().split("/") if s):
+        if seg in _SKIP_SEGMENTS or _SKIP_SEGMENT_RE.search(seg):
+            return True
+    return False
 
 
 def ingest() -> int:
