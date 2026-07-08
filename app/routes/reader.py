@@ -130,7 +130,14 @@ def article(request: Request, article_id: int):
                 s.commit()
                 s.refresh(a)
 
-        body_pending = do_translate and bool(a.content) and a.content_no is None
+        # The body is fetched/translated lazily via /article/{id}/body after the
+        # page renders, so opening never blocks. Defer when a translation is
+        # still owed OR when the body was never fetched and is empty (e.g. a
+        # Hacker News link-out, or a source whose RSS ships no usable body) —
+        # in the latter case /body does an on-demand full-text fetch.
+        needs_fetch = not a.content and a.content_fetched_at is None
+        body_translating = do_translate and bool(a.content) and a.content_no is None
+        body_pending = body_translating or needs_fetch
 
         # Previous/next within the latest edition, so you can page through it
         # like a newspaper.
@@ -165,6 +172,7 @@ def article(request: Request, article_id: int):
             "next_item": next_item,
             "read_min": read_min,
             "body_pending": body_pending,
+            "body_translating": body_translating,
             "source_name": source_name,
         },
     )
@@ -179,6 +187,25 @@ def article_body(article_id: int):
         a = s.get(Article, article_id)
         if not a:
             return JSONResponse({"error": "not found"}, status_code=404)
+
+        # On-demand full-text fetch: the body was never fetched and is empty
+        # (an aggregator link-out, or a source whose RSS shipped no usable body).
+        # Static only — no browser on the request path — so this can't hang the
+        # worker on the Playwright stack; JS-only pages simply stay body-less.
+        if not a.content and a.content_fetched_at is None:
+            from ..fetchers.content import extract_static
+
+            res = extract_static(a.url, a.title)
+            if res is not None:
+                if res.get("content"):
+                    a.content = res["content"]
+                if res.get("image") and not a.image_url:
+                    a.image_url = res["image"]
+                a.paywalled = bool(res.get("paywalled"))
+                a.content_fetched_at = utcnow()
+                s.commit()
+                s.refresh(a)
+
         src = s.get(Source, a.source_id)
         do_translate = llm.enabled() and runtime_config.should_translate(src.lang if src else "")
         if do_translate and a.content and a.content_no is None:

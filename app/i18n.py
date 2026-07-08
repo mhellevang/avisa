@@ -96,6 +96,7 @@ CATALOG: dict[str, dict[str, str]] = {
         # article
         "min read": "min lesetid",
         "Translating the article …": "Oversetter artikkelen …",
+        "Fetching the article …": "Henter artikkelen …",
         "Couldn't translate — showing the original.":
             "Kunne ikke oversette — viser originalteksten.",
         "Read the full story at the source:": "Les hele saken hos kilden:",

@@ -19,8 +19,8 @@
   <p class="lead-para">{{ a.display_summary }}</p>
 
   {% set bodytext = a.content_no or a.content %}
-  {% if bodytext %}
-    {% if body_pending %}<p class="translating" id="translating-note">{{ t("Translating the article …") }}</p>{% endif %}
+  {% if bodytext or body_pending %}
+    {% if body_pending %}<p class="translating" id="translating-note">{{ t("Translating the article …") if body_translating else t("Fetching the article …") }}</p>{% endif %}
     <div class="body-text" id="body-text"{% if body_pending %} data-translate-url="/article/{{ a.id }}/body"{% endif %}>
       {{ body_html(bodytext)|safe }}
     </div>
