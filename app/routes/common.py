@@ -5,10 +5,11 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from fastapi.templating import Jinja2Templates
+from markupsafe import Markup, escape
 from sqlmodel import select
 
 from .. import i18n, runtime_config
-from ..markdown import body_html
+from ..markdown import body_html, dropcap_html
 from ..models import Article, Edition, EditionItem, Source
 
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
@@ -31,6 +32,12 @@ def t(key: str) -> str:
     return i18n.t(key, ui_lang())
 
 
+def dropcap(text: str) -> Markup:
+    """Escapes plain text and wraps its first letter in a drop-cap span (used for
+    the lead ingress; the body's first paragraph is capped inside body_html)."""
+    return Markup(dropcap_html(str(escape(text or ""))))
+
+
 # Date helpers localized to the paper's current UI language. Template names are
 # kept (no_date / no_datetime) so the markup doesn't need to change.
 templates.env.globals["no_date"] = lambda dt: i18n.fmt_date(dt, ui_lang())
@@ -41,6 +48,7 @@ templates.env.globals["paper_title"] = runtime_config.paper_title
 templates.env.globals["t"] = t
 templates.env.globals["ui_lang"] = ui_lang
 templates.env.globals["body_html"] = body_html
+templates.env.globals["dropcap"] = dropcap
 # Naive-UTC timestamp -> the paper's local timezone, for the morning/evening
 # label and any other place a template needs the local wall-clock hour.
 templates.env.globals["to_local"] = i18n.to_local

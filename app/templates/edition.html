@@ -66,7 +66,7 @@
     <span class="kicker">{{ lead.section }}{% if source_names.get(lead.source_id) %} · {{ source_names[lead.source_id] }}{% endif %}</span>
     <h2><a href="/article/{{ lead.id }}">{{ lead.display_title }}</a></h2>
     {% if lead.deck %}<p class="deck">{{ lead.deck }}</p>{% endif %}
-    <p class="ingress">{{ lead.display_summary }}</p>
+    <p class="ingress">{{ dropcap(lead.display_summary) }}</p>
     {% if lead.curate_reason %}<p class="reason">{{ lead.curate_reason }}</p>{% endif %}
   </article>
   {% endif %}

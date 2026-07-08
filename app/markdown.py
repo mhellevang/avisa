@@ -109,6 +109,21 @@ def _render_table(rows: list[str]) -> str:
     )
 
 
+# Drop cap: wrap the first visible letter (after leading whitespace / an opening
+# quote or bracket) in a span. CSS ::first-letter always swallows leading
+# punctuation, so a «guillemet»- or "quote"-led paragraph rendered a giant «D /
+# "W; scoping the enlargement to the letter's own span avoids that. Works on a
+# plain (escaped) string — the lead ingress — and on a leading '<p>' — the body's
+# first paragraph. If the text opens with a tag or a non-letter, no cap is added.
+_DROPCAP_RE = re.compile(
+    r'^(\s*(?:<p>)?[\s"«»“”‘’\'(\[–—\-]*)([0-9A-Za-zÀ-ÿ])'
+)
+
+
+def dropcap_html(html: str) -> str:
+    return _DROPCAP_RE.sub(r'\1<span class="dropcap">\2</span>', html, count=1)
+
+
 def _rejoin_wraps(md: str) -> str:
     """When the body separates paragraphs with blank lines, a lone newline
     between two plain-prose lines is a soft wrap, not a paragraph break — join
@@ -230,4 +245,8 @@ def body_html(md: str) -> str:
         i += 1
 
     flush_list()
+    # Drop cap on the body's opening paragraph (only when it genuinely starts
+    # with a paragraph — mirrors the .body-text > p:first-child scope in CSS).
+    if html and html[0].startswith("<p>"):
+        html[0] = dropcap_html(html[0])
     return "".join(html)

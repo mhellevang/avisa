@@ -201,8 +201,10 @@ html { scroll-behavior: smooth; }
   line-height: 1.5;
   margin: 0 0 10px;
 }
-/* Drop cap on the lead — a classic broadsheet touch. */
-.lead .ingress::first-letter {
+/* Drop cap on the lead — a classic broadsheet touch. Applied to a wrapped
+   .dropcap span (not ::first-letter) so a leading «guillemet»/quote isn't
+   enlarged along with the letter. */
+.lead .ingress .dropcap {
   font-family: var(--display);
   font-weight: 800;
   float: left;
@@ -388,11 +390,12 @@ html { scroll-behavior: smooth; }
 .body-text code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.92em; background: var(--rule); padding: 0.1em 0.3em; border-radius: 3px; }
 .body-text pre { background: var(--rule); border-radius: 5px; padding: 0.9em 1em; margin: 0 0 1em; overflow-x: auto; line-height: 1.45; }
 .body-text pre code { display: block; background: none; padding: 0; border-radius: 0; font-size: 0.88em; white-space: pre; }
-/* Drop cap only when the body genuinely OPENS with a paragraph. Scoping to the
-   direct first child (body_html emits a flat list of p/ul/table/h2/figure) means
-   a body that starts with an image, list, table or heading doesn't get a drop
-   cap floated onto the wrong (later) paragraph. */
-.body-text > p:first-child::first-letter {
+/* Drop cap only when the body genuinely OPENS with a paragraph. body_html wraps
+   the first letter of that paragraph in a .dropcap span (skipping a leading
+   quote/punctuation), and only when the first block is a <p> — so a body that
+   starts with an image, list, table or heading gets no stray drop cap, and a
+   «guillemet»/quote lead isn't enlarged with the letter. */
+.body-text > p:first-child .dropcap {
   font-family: var(--display);
   font-size: 3.4rem;
   float: left;
