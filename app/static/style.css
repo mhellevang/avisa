@@ -200,8 +200,6 @@ html { scroll-behavior: smooth; }
   font-size: 1.12rem;
   line-height: 1.5;
   margin: 0 0 10px;
-  column-count: 2;
-  column-gap: 24px;
 }
 /* Drop cap on the lead — a classic broadsheet touch. */
 .lead .ingress::first-letter {
@@ -249,8 +247,11 @@ html { scroll-behavior: smooth; }
 .rule-thick { border-top: 3px double var(--ink); margin: 30px 0 22px; }
 
 /* ---------- Seksjoner ---------- */
+/* Content-driven columns: the browser fits as many ~16rem columns as the width
+   allows, so a section with only a few stories doesn't leave two empty columns
+   beside one narrow one (a fixed column-count: 3 does). */
 .sections {
-  column-count: 3;
+  column-width: 16rem;
   column-gap: 30px;
   column-rule: 1px solid var(--rule);
 }
@@ -307,7 +308,7 @@ html { scroll-behavior: smooth; }
   list-style: none;
   margin: 0;
   padding: 0;
-  columns: 3;
+  columns: 16rem;
   column-gap: 30px;
   column-rule: 1px solid var(--rule);
 }
@@ -338,7 +339,7 @@ html { scroll-behavior: smooth; }
   border-bottom: 2px solid var(--accent);
   padding-bottom: 2px;
 }
-.more-list { columns: 2; column-gap: 36px; margin-top: 20px; }
+.more-list { columns: 18rem; column-gap: 36px; margin-top: 20px; }
 .more-item { break-inside: avoid; margin-bottom: 18px; padding-bottom: 14px; border-bottom: 1px solid var(--rule); }
 .more-item h3 { font-family: var(--display); font-size: 1.15rem; margin: 4px 0 6px; line-height: 1.15; }
 .more-item p { font-size: 0.9rem; line-height: 1.4; margin: 0; }
@@ -387,7 +388,11 @@ html { scroll-behavior: smooth; }
 .body-text code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.92em; background: var(--rule); padding: 0.1em 0.3em; border-radius: 3px; }
 .body-text pre { background: var(--rule); border-radius: 5px; padding: 0.9em 1em; margin: 0 0 1em; overflow-x: auto; line-height: 1.45; }
 .body-text pre code { display: block; background: none; padding: 0; border-radius: 0; font-size: 0.88em; white-space: pre; }
-.body-text p:first-of-type::first-letter {
+/* Drop cap only when the body genuinely OPENS with a paragraph. Scoping to the
+   direct first child (body_html emits a flat list of p/ul/table/h2/figure) means
+   a body that starts with an image, list, table or heading doesn't get a drop
+   cap floated onto the wrong (later) paragraph. */
+.body-text > p:first-child::first-letter {
   font-family: var(--display);
   font-size: 3.4rem;
   float: left;
