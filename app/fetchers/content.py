@@ -96,6 +96,20 @@ _PROMO_LINE = re.compile(
     r"^\[?(?:skip past|after) (?:the )?newsletter promotion\b|emailsignup-skip-link",
     re.I,
 )
+# Standalone chrome lines that survive extraction as their own line: BBC's
+# "Published" metadata label, Schibsted "Vis mer/mindre" show-more controls,
+# NRK's poll disclaimer, and E24's "laget med kunstig intelligens" AI-summary
+# disclaimer. Anchored to the WHOLE line (after any leading bullet/heading
+# marker) so it never touches the same words used inside a real sentence.
+_CHROME_LINE = re.compile(
+    r"^[-*#>\s]*(?:"
+    r"published"
+    r"|vis (?:mer|mindre)"
+    r"|denne avstemningen viser ikke\b.*"
+    r"|.*\blaget med kunstig intelligens\b.*"
+    r")\s*[.:]?\s*$",
+    re.I,
+)
 
 
 def _strip_chrome_lines(md: str) -> str:
@@ -105,7 +119,7 @@ def _strip_chrome_lines(md: str) -> str:
         stripped = line.strip()
         if stripped in ("**", "*"):
             continue  # orphaned bold/italic marker from a split caption block
-        if _PROMO_LINE.search(stripped):
+        if _PROMO_LINE.search(stripped) or _CHROME_LINE.match(stripped):
             continue
         out.append(line)
     return "\n".join(out)
@@ -120,13 +134,29 @@ _TAIL_LABELS = {
     "journal references",
     "cite this page",
     "related stories",
+    "les flere artikler",   # Digi.no recommendation module
+    "related topics",       # BBC footer
+    "related internet links",  # BBC footer
 }
+
+# Trailing widget/CTA blocks whose heading text VARIES (so an exact label set
+# can't catch them): everything from the marker to the end is chrome.
+_TRAILING_WIDGET = re.compile(
+    r"^[-*#>\s]*(?:"
+    r"more about\b.*\bfrom the bbc"      # BBC "More about X from the BBC:"
+    r"|follow topics and authors"         # The Verge footer CTA
+    r"|find your next great read"         # New Yorker round-up promo
+    r")",
+    re.I,
+)
 
 
 def _strip_trailing_sections(md: str) -> str:
     lines = md.split("\n")
     for i, line in enumerate(lines):
         s = line.strip()
+        if i > 0 and _TRAILING_WIDGET.match(s):
+            return "\n".join(lines[:i]).strip()
         if len(s) > 40:
             continue
         bare = s.lstrip("#").strip().strip("*").strip().rstrip(":").strip().lower()
@@ -140,18 +170,25 @@ def _norm_title(s: str) -> str:
 
 
 def _strip_title_heading(md: str, title: str) -> str:
-    """Drops a leading heading that repeats the article title — the article
+    """Drops a heading near the top that repeats the article title — the article
     page already renders the title above the body, so it shows twice. A leading
     level-1 heading is always the page's own title (the site's H1 may be edited
     away from the feed title, e.g. Aftenposten), so it goes regardless; deeper
-    levels only when they match the known title."""
-    lines = md.split("\n")
-    first = lines[0].strip() if lines else ""
-    if not first.startswith("#"):
-        return md
-    is_h1 = not first.startswith("##")
-    if is_h1 or (title and _norm_title(first.lstrip("#")) == _norm_title(title)):
-        return "\n".join(lines[1:]).strip()
+    levels only when they match the known title. The title heading is not always
+    the FIRST block — some sites (e.g. The Verge) lead with a standfirst/hook
+    paragraph and put the '# headline' a block or two down — so scan the first
+    few single-line blocks, not only line 0."""
+    blocks = re.split(r"\n\s*\n", md)
+    ntitle = _norm_title(title) if title else ""
+    for idx in range(min(3, len(blocks))):
+        b = blocks[idx].strip()
+        if not b.startswith("#") or "\n" in b:
+            continue
+        heading_text = b.lstrip("#").strip()
+        is_h1 = not b.startswith("##")
+        if (idx == 0 and is_h1) or (ntitle and _norm_title(heading_text) == ntitle):
+            del blocks[idx]
+            return "\n\n".join(blocks).strip()
     return md
 
 
@@ -256,9 +293,13 @@ def _dedupe_blocks(md: str) -> str:
     out: list[str] = []
     for block in blocks:
         key = block.strip().lstrip("#").strip().lower()
-        if key and key in seen:
-            continue
-        if key:
+        # Only dedupe substantial blocks. A short line can legitimately repeat
+        # (a recurring label, a one-word refrain, "Advertisement"), and dropping
+        # its later occurrences changes the article's meaning; the duplicated
+        # headline+caption this guard targets is long enough to clear the floor.
+        if key and len(key) >= 40:
+            if key in seen:
+                continue
             seen.add(key)
         out.append(block)
     return "\n\n".join(out).strip()
@@ -274,12 +315,18 @@ def _dedupe_blocks(md: str) -> str:
 _LIVE_ENTRY = re.compile(
     # Tickers often render each timestamp as its own markdown heading ("## 10:47"),
     # and non-English tickers write "10:47 Uhr" (German) or "kl. 10.47" (Norwegian) —
-    # all of these must count, not just the bare English forms.
+    # all of these must count, not just the bare English forms. The DOTTED form
+    # (10.47) is only a timestamp when it carries a marker (kl./Uhr/am/pm); a bare
+    # "9.58" is a decimal number, not a clock time, and must NOT count (otherwise
+    # an article that lists a handful of numbers is misread as a live feed and
+    # silently discarded).
     r"^(?:#{1,6}\s*)?"                    # optional heading marker
     r"(?:[A-Za-z]+day[ ,].*?\s)?"         # optional "Monday, June 1, 2026, " prefix
     r"(?:"
-    r"(?:kl\.?\s*)?\d{1,2}[:.]\d{2}\s*(?:a\.m\.|p\.m\.|am|pm|uhr)?"  # 10:47 / kl. 10.47 / 10:47 Uhr
-    r"|\d{1,2}\s*(?:a\.m\.|p\.m\.|am|pm)"                            # hour-only "5 a.m."
+    r"kl\.?\s*\d{1,2}[:.]\d{2}"                          # Norwegian "kl. 10.47"
+    r"|\d{1,2}:\d{2}\s*(?:a\.m\.|p\.m\.|am|pm|uhr)?"     # colon form "10:47" (marker optional)
+    r"|\d{1,2}[:.]\d{2}\s*(?:a\.m\.|p\.m\.|am|pm|uhr)"   # dotted form only WITH a marker
+    r"|\d{1,2}\s*(?:a\.m\.|p\.m\.|am|pm)"                # hour-only "5 a.m."
     r")$",
     re.I,
 )
@@ -287,13 +334,15 @@ _LIVEBLOG_MIN_ENTRIES = 6
 
 
 def _looks_like_liveblog(text: str) -> bool:
-    entries = 0
-    for line in text.splitlines():
-        if _LIVE_ENTRY.match(line.strip()):
-            entries += 1
-            if entries >= _LIVEBLOG_MIN_ENTRIES:
-                return True
-    return False
+    """A live feed is a long stream of standalone timestamp lines. Require both
+    an absolute count AND that the timestamps are a real fraction of the body,
+    so a normal article that happens to have a few standalone times isn't
+    mistaken for a ticker (and thrown away)."""
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    if not lines:
+        return False
+    entries = sum(1 for ln in lines if _LIVE_ENTRY.match(ln))
+    return entries >= _LIVEBLOG_MIN_ENTRIES and entries >= 0.1 * len(lines)
 
 
 # Thumbnail wrappers: many sites render article figures as <a href=full><img
@@ -321,22 +370,45 @@ def _unwrap_img_links(html: str) -> str:
 
 # Junk images: logos, placeholders, sprites, tracking pixels, avatars, ad slots —
 # never article content. Shared by the inline-image and og:image filters.
-# 'default' must not match a bare path segment (NPR's CDN routes every real
-# photo through /dims3/default/strip/…) — only default.jpg / og-default etc.
+# Tokens are matched only as whole path/filename COMPONENTS (bounded by /, ., _
+# or the string ends) — never as arbitrary substrings — so a real photo whose
+# slug happens to contain a token doesn't get dropped: "google-pixel-9.jpg",
+# "avatar-the-way-of-water.jpg", "blogosphere-map.png", "sprite-can.jpg" all
+# survive (the token there is hyphen-joined into a larger word, not its own
+# component). 'default' keeps its old rule (no leading boundary, but not
+# followed by a letter or '/') so 'og-default.png' is caught while NPR's
+# /dims3/default/strip/… CDN path is not.
 _JUNK_IMG = re.compile(
-    r"default(?![a-z/])|placeholder|logo|fallback|share[_-]?image|sprite|/icons?/|avatar|/ads?/|pixel|1x1|spacer",
+    r"default(?![a-z/])"
+    r"|(?:^|[/_.])(?:placeholder|logos?|fallback|sprites?|avatars?|spacer|icons?|ads?|1x1|pixel|spinner)(?:[._/]|$)"
+    r"|share[_-]?image",
     re.I,
 )
 
-# An extracted markdown image: ![alt](src "optional title").
-_MD_IMG = re.compile(r"!\[([^\]]*)\]\(([^)]*)\)")
+# An extracted markdown image: ![alt](src "optional title"). The alt may hold a
+# nested ']' that is NOT the closing bracket (photo credits like "Name
+# [Reuters]"), so only a ']' directly before '(' terminates it; the src may hold
+# balanced parentheses (e.g. "/wiki/Foo_(bar)").
+_MD_IMG = re.compile(
+    r"!\[((?:[^\]]|\](?!\())*)\]\(([^()]*(?:\([^)]*\)[^()]*)*)\)"
+)
+
+
+# BBC ichef serves the same photo at many rendition prefixes
+# (…/branded_news/1200/cpsprodpb/HASH/live/FILE for the social hero vs
+# …/standard/864/cpsprodpb/HASH/live/FILE inline), so a plain path compare never
+# matches and the hero renders twice. The 'cpsprodpb/HASH/live/FILE' tail is the
+# stable asset id — key on it so hero and inline collapse to one.
+_ICHEF_ASSET = re.compile(r"/(cpsprodpb/[^/]+/live/[^/]+)$")
 
 
 def _img_key(src: str) -> str:
     """Normalizes an image URL for same-image comparison: drops the query string
     (resize/quality params) and fragment, lowercased. So a 1920×1440 hero and a
     770×513 inline crop of the same file (…getty_123.jpg?resize=…) compare equal."""
-    return src.split("?")[0].split("#")[0].lower()
+    s = src.split("?")[0].split("#")[0].lower()
+    m = _ICHEF_ASSET.search(s)
+    return m.group(1) if m else s
 
 
 def _clean_images(md: str, base_url: str, hero_url: Optional[str] = None) -> str:
@@ -375,9 +447,90 @@ def _clean_images(md: str, base_url: str, hero_url: Optional[str] = None) -> str
 # credit inside <figcaption> (NRK: <small>Foto: X / NRK</small>). trafilatura
 # glues its text onto the next paragraph with no separator ("… / NRKHan mener …"),
 # so drop the element before extraction. The closing tag may wrap its '>' onto
-# the next line (NRK writes '</small\n>'), and the content is capped so an
-# unclosed tag can never swallow a chunk of the article.
-_SMALL_TAG = re.compile(r"<small\b[^>]*>.{0,400}?</small\s*>", re.I | re.S)
+# the next line (NRK writes '</small\n>'). The match is non-greedy so it stops
+# at the first '</small>' — an unclosed tag simply won't match and can't swallow
+# content, so no arbitrary length cap is needed (a cap would instead let long
+# fine-print survive when it exceeds the cap).
+_SMALL_TAG = re.compile(r"<small\b[^>]*>.*?</small\s*>", re.I | re.S)
+
+# <u> carries no article meaning, and when it sits inside a link
+# (<a><u>phrase</u></a>) trafilatura mis-serializes the surrounding text order
+# (NPR), tearing one sentence into out-of-order fragments. It also comes out as
+# '__phrase__' (double-underscore) markdown, which the body renderer would show
+# literally. Unwrap the tags (keep the text) before extraction.
+_U_TAG = re.compile(r"</?u\b[^>]*>", re.I)
+
+# <figcaption> is a photo caption — usually a credit ("Foto: X", "Getty") or a
+# one-line description. trafilatura glues it onto the adjacent paragraph with no
+# separator (Schibsted/Aftenposten) or lifts a top-of-article video caption to
+# the body's first line (BBC), so drop the element before extraction. The image
+# itself is kept; only its caption chrome goes.
+_FIGCAPTION = re.compile(r"<figcaption\b[^>]*>.*?</figcaption\s*>", re.I | re.S)
+
+# Schibsted "WordExplainer" glossary tooltip (E24/Aftenposten): an inline term
+# span wraps BOTH the term and a hidden <span class="_definition_…">definition</span>
+# dropdown. trafilatura keeps the aria-hidden definition and glues it straight
+# onto the term ("risikopremienEt påslag på …"), corrupting the sentence. Drop
+# the definition dropdown (up to its close button); the term text is kept.
+_SCHIBSTED_WORDDEF = re.compile(
+    r'<span[^>]*\b_definition_[^>]*>.*?</button>\s*</span>', re.I | re.S
+)
+
+# Many sites lazy-load images: the real URLs live in srcset while src is a
+# data:-URI placeholder (NRK). trafilatura reads src, so the article comes out
+# image-less. Promote a real srcset candidate (the last = largest) to src.
+_IMG_TAG = re.compile(r"<img\b[^>]*>", re.I)
+_SRCSET_ATTR = re.compile(r'\bsrcset=["\']([^"\']+)["\']', re.I)
+_SRC_ATTR = re.compile(r'\bsrc=["\']([^"\']*)["\']', re.I)
+
+
+def _resolve_srcset(html: str) -> str:
+    def repl(m: "re.Match") -> str:
+        tag = m.group(0)
+        src_m = _SRC_ATTR.search(tag)
+        src = src_m.group(1) if src_m else ""
+        if src and not src.lower().startswith("data:"):
+            return tag  # already has a real src
+        ss = _SRCSET_ATTR.search(tag)
+        if not ss:
+            return tag
+        cands = [c.strip().split()[0] for c in ss.group(1).split(",") if c.strip()]
+        if not cands:
+            return tag
+        real = cands[-1]
+        if src_m:
+            return tag[: src_m.start(1)] + real + tag[src_m.end(1):]
+        return tag[:-1] + f' src="{real}">'
+
+    return _IMG_TAG.sub(repl, html)
+
+
+# Adjacent inline emphasis elements are serialized by trafilatura with no
+# separator, so a run of <em> items collapses into one span with internal '**'
+# boundaries — e.g. an NPR nominee list becomes a single mashed-together line:
+#   *Abbott Elementary**The Bear**Nobody Wants This*
+# Split such a whole-line italic run back into comma-separated italics, and put
+# a space back between an emphasis span glued straight onto a following
+# capitalized word ("**YouTube**Liza …").
+_GLUED_ITALIC_LINE = re.compile(r"\*(?!\s)(\S.*?\S)\*")
+# Only the double-star (bold) form: a bold caption/credit glued straight onto
+# the next sentence ("**YouTube**Liza …"). A single-star rule would spuriously
+# pair the '*, *' separators produced by the italic-run split above.
+_EMPH_GLUED_CAP = re.compile(r"(\*\*[^*\n]+\*\*)(?=[A-ZÀ-Þ])")
+
+
+def _deglue_emphasis(md: str) -> str:
+    out: list[str] = []
+    for line in md.split("\n"):
+        s = line.strip()
+        m = _GLUED_ITALIC_LINE.fullmatch(s)
+        if m and "**" in m.group(1):
+            parts = [p.strip() for p in m.group(1).split("**") if p.strip()]
+            out.append(", ".join(f"*{p}*" for p in parts))
+        else:
+            out.append(line)
+    md = "\n".join(out)
+    return _EMPH_GLUED_CAP.sub(r"\1 ", md)
 
 
 def _extract_text(
@@ -386,6 +539,10 @@ def _extract_text(
     if not html:
         return None
     html = _SMALL_TAG.sub(" ", html)
+    html = _U_TAG.sub("", html)
+    html = _FIGCAPTION.sub(" ", html)
+    html = _SCHIBSTED_WORDDEF.sub("", html)
+    html = _resolve_srcset(html)
     html = _unwrap_img_links(html)
     try:
         text = trafilatura.extract(
@@ -411,6 +568,7 @@ def _extract_text(
     if not text:
         return None
     text = _strip_chrome_lines(text)
+    text = _deglue_emphasis(text)
     cleaned = (
         _dedupe_blocks(_strip_metadata_header(_strip_related_lists(_clean_markdown(text))))
         or None
@@ -476,6 +634,14 @@ _BOT_WALL = (
     "enable javascript and cookies to continue",
     "attention required! | cloudflare",
     "ddos protection by",
+    # Le Monde's DataDome interstitial (served with HTTP 402): French bot notice
+    # + the captcha vendor. On the static path this now reaches _result via
+    # extract_static's status handling; on the Playwright path the challenge page
+    # is already too short to pass content_min_chars.
+    "votre trafic a été identifié comme automatisé",
+    "trafic a été identifié comme automatisé",
+    "captcha-delivery.com",
+    "geo.captcha-delivery",
 )
 
 
@@ -490,15 +656,21 @@ def _is_paywalled(html: str, thin: bool = True) -> bool:
     if not html:
         return False
     low = html.lower()
-    # Tolerate backslash-escaped quotes: many sites (e.g. Digi.no) embed the
-    # schema.org JSON-LD inside a JS string, so it reads \"isAccessibleForFree\":\"False\".
+    # isAccessibleForFree is the schema.org standard many newspapers expose, but
+    # some fully-open sites (e.g. The Verge / Vox Media) carry
+    # "isAccessibleForFree":false on articles that are actually free and extract
+    # in full. So — like the text markers below — trust it only when extraction
+    # came up short: if we got the whole body, it is not paywalled regardless of
+    # the flag. Guards against false positives that would hide open articles.
+    if not thin:
+        return False
     if re.search(r'\\?"isaccessibleforfree\\?"\s*:\s*\\?"?false', low):
         return True
     # The text markers are searched in the WHOLE document (nav, footer,
     # newsletter banners, teasers for other stories), so on their own they
     # misfire on fully open pages. Only trust them when extraction actually
     # came up short — i.e. when a paywall plausibly withheld the body.
-    return thin and any(m in low for m in _PAYWALL_TEXT)
+    return any(m in low for m in _PAYWALL_TEXT)
 
 
 def _result(html: str, url: str, title: str = "") -> dict:
@@ -517,11 +689,16 @@ def _result(html: str, url: str, title: str = "") -> dict:
 
 
 def extract_static(url: str, title: str = "") -> Optional[dict]:
-    """Fetches and extracts text + image without a browser. None if the fetch fails."""
+    """Fetches and extracts text + image without a browser. None if the fetch
+    fails at the transport level (retried next run). A 401/402/403 usually
+    serves a paywall or bot-wall page rather than the article, so classify it
+    (blocked/paywalled) instead of treating it as a transient failure that
+    retries forever; other non-2xx statuses are treated as failures."""
     try:
         r = httpx.get(url, timeout=20.0, follow_redirects=True, headers={"User-Agent": _UA})
-        r.raise_for_status()
     except Exception:
+        return None
+    if not (200 <= r.status_code < 300 or r.status_code in (401, 402, 403)):
         return None
     return _result(r.text, url, title)
 
