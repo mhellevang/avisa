@@ -530,7 +530,124 @@ def _deglue_emphasis(md: str) -> str:
         else:
             out.append(line)
     md = "\n".join(out)
-    return _EMPH_GLUED_CAP.sub(r"\1 ", md)
+    md = _EMPH_GLUED_CAP.sub(r"\1 ", md)
+    # A markdown link/image immediately followed by an alphanumeric — trafilatura
+    # sometimes drops the space after a link, gluing the next word onto the
+    # anchor text ("[… spotted by](url)suggests …"). Restore the space.
+    md = re.sub(r"(\]\([^)]*\))(?=[0-9A-Za-zÀ-ÿ])", r"\1 ", md)
+    return md
+
+
+# ---- leading / orphan chrome that survives into the cleaned markdown -------
+
+def _strip_leading_byline_bullet(md: str) -> str:
+    """Drops a stray leading single-item bullet that is just a byline — some
+    sources (Aftenposten) emit the author as '- Name' as the article's first
+    line, which renders as a one-item <ul>. Only a SHORT name-like item (no
+    sentence/label punctuation, ≤5 words, no link) that is NOT followed by
+    another bullet (i.e. not a genuine list) is removed."""
+    lines = md.split("\n")
+    i = 0
+    while i < len(lines) and not lines[i].strip():
+        i += 1
+    if i >= len(lines):
+        return md
+    first = lines[i].strip()
+    if first[:2] not in ("- ", "* "):
+        return md
+    item = first[2:].strip()
+    if (
+        not item
+        or len(item) > 50
+        or len(item.split()) > 5
+        or "](" in item
+        or item.endswith((".", "!", "?", ":", ";"))
+    ):
+        return md
+    j = i + 1
+    while j < len(lines) and not lines[j].strip():
+        j += 1
+    if j < len(lines) and lines[j].strip()[:2] in ("- ", "* "):
+        return md  # a real list — leave it
+    return "\n".join(lines[:i] + lines[i + 1:]).strip()
+
+
+# A leading "date · N min · #tag" chrome line (gracefulliberty via HN, others):
+# it duplicates the byline date and the reading time and renders the tag as a
+# link — page chrome, not article text.
+_LEADING_META = re.compile(
+    r"^(?:\d{4}-\d{2}-\d{2}|\d{1,2}\s+\w+\.?\s+\d{4})"      # a date leads
+    r"(?:\s*·\s*(?:\d+\s*min(?:\s*read)?|#[\w-]+))+\s*$",   # · N min · #tag …
+    re.I,
+)
+
+
+def _strip_leading_meta_line(md: str) -> str:
+    lines = md.split("\n")
+    i = 0
+    while i < len(lines) and not lines[i].strip():
+        i += 1
+    if i >= len(lines):
+        return md
+    probe = re.sub(r"\[(#[\w-]+)\]\([^)]*\)", r"\1", lines[i].strip())
+    if _LEADING_META.match(probe):
+        return "\n".join(lines[:i] + lines[i + 1:]).strip()
+    return md
+
+
+def _strip_orphan_chart_labels(md: str) -> str:
+    """Interactive chart components leave a caption/label line but no chart
+    (E24/Aftenposten: 'Hopp i oljeprisen onsdag:'). Drop a short colon-terminated
+    label ONLY when nothing real follows it — EOF, a heading, an image, or
+    another bare label — so a genuine lead-in ('Slik gjorde vi det:' + prose) is
+    kept."""
+    blocks = re.split(r"\n\s*\n", md)
+
+    def is_label(b: str) -> bool:
+        b = b.strip()
+        return 0 < len(b) <= 80 and b.endswith(":") and not b.startswith(
+            ("#", "-", "*", "|", "!", ">")
+        )
+
+    out: list[str] = []
+    for k, b in enumerate(blocks):
+        if is_label(b):
+            nxt = blocks[k + 1].strip() if k + 1 < len(blocks) else ""
+            if not nxt or is_label(nxt) or nxt.startswith(("#", "!")):
+                continue
+        out.append(b)
+    return "\n\n".join(out).strip()
+
+
+_HEADING_LEVEL = re.compile(r"^(#{1,6})\s")
+
+
+def _strip_empty_headings(md: str) -> str:
+    """Drops an orphaned section heading — one with no content of its own,
+    immediately followed by another heading of the same or shallower level, or
+    by nothing (EOF). E.g. an NRK poll question heading whose interactive widget
+    didn't extract, leaving '## Hvor skal du se kampen?' right before the next
+    section. A DEEPER heading after it (a real subsection) means it is a parent,
+    so it is kept."""
+    lines = md.split("\n")
+    out: list[str] = []
+    i, n = 0, len(lines)
+    while i < n:
+        m = _HEADING_LEVEL.match(lines[i].strip())
+        if m:
+            j = i + 1
+            while j < n and not lines[j].strip():
+                j += 1
+            if j >= n:
+                i += 1  # trailing heading with no content — drop
+                continue
+            m2 = _HEADING_LEVEL.match(lines[j].strip())
+            if m2 and len(m2.group(1)) <= len(m.group(1)):
+                i += 1  # empty section — drop the orphan heading
+                continue
+        out.append(lines[i])
+        i += 1
+    return "\n".join(out).strip()
 
 
 def _extract_text(
@@ -575,6 +692,11 @@ def _extract_text(
     )
     if cleaned:
         cleaned = _strip_trailing_sections(_strip_title_heading(cleaned, title)) or None
+    if cleaned:
+        cleaned = _strip_leading_byline_bullet(cleaned)
+        cleaned = _strip_leading_meta_line(cleaned)
+        cleaned = _strip_orphan_chart_labels(cleaned)
+        cleaned = _strip_empty_headings(cleaned) or None
     if cleaned:
         # Strip: dropping a leading duplicate-of-hero image leaves blank lines.
         cleaned = _clean_images(cleaned, url, hero_url).strip() or None
