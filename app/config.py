@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     # OpenRouter
     openrouter_api_key: str = ""
     curate_model: str = "anthropic/claude-haiku-4.5"
-    translate_model: str = "anthropic/claude-haiku-4.5"
+    translate_model: str = "anthropic/claude-sonnet-5"
 
     # Local Claude session (claude CLI). Empty model = the CLI's default model.
     claude_model: str = ""
