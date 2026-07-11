@@ -52,7 +52,7 @@
 
 <section class="settings-block">
   <h3>{{ t("Paper & profile") }}</h3>
-  <p class="settings-hint">{{ t("LLM:") }} <strong>{{ provider_label }}</strong></p>
+  <p class="settings-hint">{{ t("LLM:") }} <strong>{{ provider_label }}</strong>{% if llm_enabled and not llm_health.ok %} <span class="llm-warn">⚠ {{ llm_health.warning }}</span>{% endif %}</p>
   <form action="/settings" method="post" class="settings-form">
     <label>{{ t("Title") }}
       <input type="text" name="paper_title" value="{{ paper_title_val }}" required>

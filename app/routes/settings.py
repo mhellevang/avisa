@@ -100,6 +100,7 @@ def settings_page(request: Request, saved: int = 0, msg: str = "", region: str =
             "proposed_sources": proposed,
             "provider_label": llm.provider_label(),
             "llm_enabled": llm.enabled(),
+            "llm_health": llm.health(),
             "saved": bool(saved),
             "msg": msg,
             "chat": _load_chat(),

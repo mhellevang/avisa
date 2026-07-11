@@ -20,7 +20,7 @@
   <p class="motto">{{ t("All worth knowing, before your coffee") }}</p>
   <div class="masthead-rule">
     {% if edition %}{{ t("Updated") }} {{ no_datetime(edition.built_at) }} <span class="edition-age" data-built="{{ edition.built_at.isoformat() }}"></span>{% else %}{{ t("Building the first edition …") }}{% endif %}
-    {% if not llm_enabled %}<span class="badge">{{ t("demo mode: no LLM — raw curation, untranslated") }}</span>{% else %}<span class="badge ok">{{ provider_label }}</span>{% endif %}
+    {% if not llm_enabled %}<span class="badge">{{ t("demo mode: no LLM — raw curation, untranslated") }}</span>{% else %}<span class="badge {{ 'warn' if not llm_health.ok else 'ok' }}" id="llm-badge">{% if not llm_health.ok %}⚠ {{ llm_health.warning }}{% else %}{{ provider_label }}{% endif %}</span>{% endif %}
   </div>
 </header>
 
@@ -158,6 +158,23 @@
   };
   const secs = v => (v ? Math.round(v) + ' s' : '');
 
+  // LLM-helse fra samme poll: badgen i mastheaden flipper mellom «alt ok»
+  // (providernavn) og en advarsel (f.eks. tom OpenRouter-kreditt) uten reload.
+  const llmBadge = document.getElementById('llm-badge');
+  const llmLabel = {{ provider_label|tojson }};
+  function updateLlmBadge(llm) {
+    if (!llmBadge || !llm) return;
+    if (llm.ok) {
+      llmBadge.textContent = llmLabel;
+      llmBadge.classList.add('ok');
+      llmBadge.classList.remove('warn');
+    } else {
+      llmBadge.textContent = '⚠ ' + llm.warning;
+      llmBadge.classList.add('warn');
+      llmBadge.classList.remove('ok');
+    }
+  }
+
   const pctOf = d => {
     if (d.last_duration > 0) return Math.min(99, d.elapsed / d.last_duration * 100);
     if (d.steps) return Math.min(95, (d.step - 1) / d.steps * 100 + 8);
@@ -175,6 +192,7 @@
     let again = true;
     try {
       const d = await (await fetch('/status', { cache: 'no-store' })).json();
+      updateLlmBadge(d.llm);
       if (d.running) {
         strip.hidden = false;
         const step = d.steps ? `${T.step} ${d.step}/${d.steps} · ` : '';

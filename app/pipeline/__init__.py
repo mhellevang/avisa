@@ -6,7 +6,7 @@ Each step is idempotent enough to be run again.
 
 import threading
 
-from .. import i18n, progress
+from .. import i18n, llm, progress
 from .build import build_edition
 from .content import fetch_new_content, fetch_selected_content
 from .curate import curate
@@ -65,6 +65,11 @@ def _run_pipeline() -> dict:
             "translated": translated,
             "edition": edition_id,
         }
+        health = llm.health()
+        if not health["ok"]:
+            # The steps degrade silently by design (curate keeps the previous
+            # selection, translate retries next run) — say so in the run result.
+            result["llm_error"] = health.get("kind")
         print(f"[pipeline] {result}")
         return result
     finally:

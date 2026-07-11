@@ -49,6 +49,7 @@ def front(request: Request):
             "briefs": briefs,
             "source_names": src_names,
             "llm_enabled": llm.enabled(),
+            "llm_health": llm.health(),
             "provider_label": llm.provider_label(),
             "auth_enabled": auth.auth_enabled(),
             "is_admin": auth.is_authed(request),

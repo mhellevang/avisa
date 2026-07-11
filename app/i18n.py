@@ -70,6 +70,15 @@ CATALOG: dict[str, dict[str, str]] = {
         "Building the first edition …": "Bygger første utgave …",
         "demo mode: no LLM — raw curation, untranslated":
             "demo-modus: ingen LLM — råkuratert, uoversatt",
+        # LLM health (masthead badge + settings)
+        "OpenRouter: out of credits — curation and translation are paused":
+            "OpenRouter: tom for kreditt — kuratering og oversettelse står stille",
+        "OpenRouter: API key rejected — curation and translation are paused":
+            "OpenRouter: API-nøkkel avvist — kuratering og oversettelse står stille",
+        "LLM rate-limited — retrying automatically":
+            "LLM-en er ratebegrenset — prøver igjen automatisk",
+        "LLM unavailable — retrying automatically":
+            "LLM utilgjengelig — prøver igjen automatisk",
         "Top stories": "Toppsaker",
         "In brief": "Kort fortalt",
         "More stories": "Flere saker",

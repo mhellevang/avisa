@@ -68,7 +68,12 @@ def finish(result: dict | None) -> None:
 
 
 def snapshot() -> dict:
+    from . import llm  # lazy: avoids an import cycle
+
     with _lock:
         s = dict(_state)
     s["elapsed"] = round(time.time() - s["started"], 1) if s["running"] and s["started"] else 0
+    # LLM health rides along so the frontend's status poll can show/clear the
+    # degraded badge without a separate endpoint.
+    s["llm"] = llm.health()
     return s

@@ -125,6 +125,8 @@ html, body {
   border-radius: 2px;
 }
 .badge.ok { background: #2f5d3a; }
+.badge.warn { background: #8a2f2f; }
+.llm-warn { color: #8a2f2f; font-weight: 600; }
 
 /* ---------- Kicker / felles ---------- */
 .kicker {

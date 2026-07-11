@@ -9,6 +9,8 @@ import json
 import re
 import shutil
 import subprocess
+import threading
+import time
 from typing import Optional
 
 import httpx
@@ -20,6 +22,83 @@ from .config import settings
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 _claude_available: Optional[bool] = None
+
+# ---------------------------------------------------------------------------
+# LLM health. Failures used to die in a log line while the UI kept saying the
+# provider was active — an exhausted OpenRouter key (HTTP 402) silently froze
+# curation on the previous selection. Track the last error here so /status,
+# the front-page badge and the settings page can surface it.
+# ---------------------------------------------------------------------------
+# Hard errors persist until a call succeeds (topping up / fixing the key needs
+# no restart: the next real call clears it). Everything else is transient.
+_HARD_KINDS = {"credits", "auth"}
+# With a hard error, at most one real HTTP probe per window — a translate run
+# fires many parallel batches, and each would otherwise hit the dead key.
+_PROBE_HOLDOFF = 60.0  # seconds
+
+_health_lock = threading.Lock()
+_health: dict = {
+    "error": None,  # None = healthy; else {kind, status, detail, since}
+    "checked_at": 0.0,  # epoch of the last real call attempt
+}
+
+
+def _classify_llm_error(e: Exception) -> tuple[str, Optional[int]]:
+    if isinstance(e, httpx.HTTPStatusError):
+        code = e.response.status_code
+        if code == 402:
+            return "credits", code
+        if code in (401, 403):
+            return "auth", code
+        if code == 429:
+            return "rate_limit", code
+        return "http", code
+    if isinstance(e, httpx.HTTPError):
+        return "network", None
+    return "error", None
+
+
+def _record_llm_failure(e: Exception) -> None:
+    kind, status = _classify_llm_error(e)
+    with _health_lock:
+        prev = _health["error"]
+        _health["error"] = {
+            "kind": kind,
+            "status": status,
+            "detail": str(e)[:200],
+            # Keep the original onset while the same kind persists, so the UI
+            # can say how long the outage has lasted.
+            "since": prev["since"] if prev and prev["kind"] == kind else time.time(),
+        }
+
+
+def _record_llm_success() -> None:
+    with _health_lock:
+        if _health["error"]:
+            print(f"[llm] recovered from {_health['error']['kind']}")
+        _health["error"] = None
+
+
+_WARNINGS = {
+    "credits": "OpenRouter: out of credits — curation and translation are paused",
+    "auth": "OpenRouter: API key rejected — curation and translation are paused",
+    "rate_limit": "LLM rate-limited — retrying automatically",
+}
+_WARNING_DEFAULT = "LLM unavailable — retrying automatically"
+
+
+def health() -> dict:
+    """Snapshot for /status and the templates: {ok, warning, kind?, status?,
+    detail?, since?}. `warning` is a localized one-liner, '' when healthy."""
+    with _health_lock:
+        err = dict(_health["error"]) if _health["error"] else None
+    if err is None:
+        return {"ok": True, "warning": ""}
+    return {
+        "ok": False,
+        "warning": i18n.current(_WARNINGS.get(err["kind"], _WARNING_DEFAULT)),
+        **err,
+    }
 
 
 def _claude_cli_available() -> bool:
@@ -59,6 +138,18 @@ def _chat_openrouter(model: str, system: str, user: str, max_tokens: int) -> tup
     was cut off by max_tokens — a JSON reply is then guaranteed unparseable, so
     callers can react (split the batch / raise the budget) instead of retrying
     the identical call forever."""
+    with _health_lock:
+        err = _health["error"]
+        if (
+            err
+            and err["kind"] in _HARD_KINDS
+            and time.time() - _health["checked_at"] < _PROBE_HOLDOFF
+        ):
+            # Dead key (out of credits / rejected): skip without touching
+            # checked_at, so a burst of parallel batches collapses into one
+            # real probe per holdoff window.
+            return None, ""
+        _health["checked_at"] = time.time()
     try:
         resp = httpx.post(
             OPENROUTER_URL,
@@ -79,8 +170,10 @@ def _chat_openrouter(model: str, system: str, user: str, max_tokens: int) -> tup
         )
         resp.raise_for_status()
         choice = resp.json()["choices"][0]
+        _record_llm_success()
         return choice["message"]["content"], (choice.get("finish_reason") or "")
     except Exception as e:
+        _record_llm_failure(e)
         print(f"[llm] openrouter failed ({model}): {e}")
         return None, ""
 
@@ -98,10 +191,13 @@ def _chat_claude_cli(system: str, user: str) -> Optional[str]:
             cmd, input=user, capture_output=True, text=True, timeout=180
         )
         if proc.returncode != 0:
+            _record_llm_failure(RuntimeError(proc.stderr[:200]))
             print(f"[llm] claude-cli failed: {proc.stderr[:200]}")
             return None
+        _record_llm_success()
         return proc.stdout.strip()
     except Exception as e:
+        _record_llm_failure(e)
         print(f"[llm] claude-cli exception: {e}")
         return None
 
