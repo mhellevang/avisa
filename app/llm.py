@@ -582,7 +582,7 @@ def translate_headlines_batch(items: list[dict], target: str = "English") -> dic
         + "\n\n".join(blocks)
     )
     max_tokens = min(4000, 600 + len(items) * 200)
-    content, finish = _chat_ex(settings.translate_model, system, user, max_tokens=max_tokens)
+    content, finish = _chat_ex(settings.translate_headlines_model, system, user, max_tokens=max_tokens)
     if finish == "length" and len(items) > 1:
         # Truncated JSON never parses — split instead of retrying the same call.
         mid = len(items) // 2

@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     openrouter_api_key: str = ""
     curate_model: str = "anthropic/claude-haiku-4.5"
     translate_model: str = "anthropic/claude-sonnet-5"
+    # Title/lede pre-translation is high-volume and low-stakes (short snippets
+    # for the "more stories" list) — a cheap model barely shows there, while
+    # body translation stays on the better model above.
+    translate_headlines_model: str = "anthropic/claude-haiku-4.5"
 
     # Local Claude session (claude CLI). Empty model = the CLI's default model.
     claude_model: str = ""
