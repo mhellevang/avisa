@@ -467,10 +467,51 @@ def translate_fields(
     return None
 
 
+_ARTICLE_HEADER = re.compile(r"^===\s*ARTICLE\s+(\d+)\s*===\s*$", re.M)
+
+
+def _parse_sentinel_batch(text: Optional[str], truncated: bool = False) -> dict[int, dict]:
+    """Parses a '=== ARTICLE <id> ===' / TITLE: / LEDE: / BODY: reply into
+    {id: {title, summary, content}}. Unlike the previous JSON format, a reply
+    that hit max_tokens is still partially usable: every fully delimited
+    article is kept, and with `truncated` the LAST block is dropped (it was
+    cut mid-output — saving a half body would freeze broken text in)."""
+    if not text:
+        return {}
+    t = text.strip()
+    if t.startswith("```"):  # tolerate an accidental fence around the reply
+        t = t.strip("`").strip()
+    heads = list(_ARTICLE_HEADER.finditer(t))
+    keep = len(heads) - 1 if truncated else len(heads)
+    out: dict[int, dict] = {}
+    for i in range(keep):
+        h = heads[i]
+        end = heads[i + 1].start() if i + 1 < len(heads) else len(t)
+        seg = t[h.end() : end]
+        m_title = re.search(r"^TITLE:[ \t]*(.*)$", seg, re.M)
+        m_lede = re.search(r"^LEDE:[ \t]*(.*)$", seg, re.M)
+        m_body = re.search(r"^BODY:[ \t]*\n?", seg, re.M)
+        d: dict = {}
+        if m_title:
+            d["title"] = m_title.group(1).strip()
+        if m_lede:
+            d["summary"] = m_lede.group(1).strip()
+        if m_body:
+            d["content"] = seg[m_body.end() :].strip()
+        if d:
+            out[int(h.group(1))] = d
+    return out
+
+
 def translate_batch(items: list[dict], target: str = "English") -> dict[int, dict]:
     """Translates several articles in ONE call. items: [{id, title, summary, content}].
     Returns {id: {title, summary, content}}. Amortizes the expensive claude-CLI
-    startup over several articles. {} without an LLM or on failure."""
+    startup over several articles. {} without an LLM or on failure.
+
+    The reply uses the same sentinel format as the input (not JSON): no escaping
+    overhead on long bodies, and a reply truncated by max_tokens still yields
+    every complete article instead of an unparseable half-array. Articles lost
+    to truncation keep translated_at = None and are retried next run."""
     if not enabled() or not items:
         return {}
 
@@ -494,42 +535,27 @@ def translate_batch(items: list[dict], target: str = "English") -> dict[int, dic
         )
     system = _translator_system(target)
     user = (
-        f"Translate EACH article below to {target}. Keep line breaks in the "
-        "body, and keep the id for each article.\n"
-        'Respond ONLY with a JSON array: '
-        '[{"id": <int>, "title": "<title>", "summary": "<lede>", "content": "<body>"}]\n\n'
+        f"Translate EACH article below to {target}. Keep line breaks in the body.\n"
+        "Respond in EXACTLY the same format as the input: for each article, its "
+        "'=== ARTICLE <id> ===' line unchanged, then 'TITLE: ', 'LEDE: ' and 'BODY:' "
+        "with the translated text. No JSON, no code fences, no other text.\n\n"
         + "\n\n".join(blocks)
     )
     max_tokens = min(8000, 1200 + int(total_chars * 0.6))
     content, finish = _chat_ex(settings.translate_model, system, user, max_tokens=max_tokens)
+    out = _parse_sentinel_batch(content, truncated=(finish == "length"))
     if finish == "length":
-        # The reply hit max_tokens, so the JSON is truncated and can never
-        # parse — retrying the identical batch next run would loop forever at
-        # full cost. Split the batch instead; a single article gets one retry
-        # with a doubled output budget.
-        if len(items) > 1:
-            mid = len(items) // 2
-            out = translate_batch(items[:mid], target)
-            out.update(translate_batch(items[mid:], target))
-            return out
-        print(f"[llm] translation of article {items[0]['id']} truncated — retrying with a larger budget")
-        content, finish = _chat_ex(settings.translate_model, system, user, max_tokens=16000)
-        if finish == "length":
-            print(f"[llm] article {items[0]['id']} still truncated — giving up this round")
-            return {}
-    data = _extract_json(content)
-    out: dict[int, dict] = {}
-    if isinstance(data, list):
-        for d in data:
-            if isinstance(d, dict) and "id" in d:
-                try:
-                    if isinstance(d.get("content"), str):
-                        d["content"] = _restore_images(
-                            _restore_code(d["content"], code_blocks), img_blocks
-                        )
-                    out[int(d["id"])] = d
-                except (TypeError, ValueError):
-                    continue
+        if not out and len(items) == 1:
+            # A single article whose translation didn't fit — one retry with a
+            # doubled output budget, then give up this round (retried next run).
+            print(f"[llm] translation of article {items[0]['id']} truncated — retrying with a larger budget")
+            content, finish = _chat_ex(settings.translate_model, system, user, max_tokens=16000)
+            out = _parse_sentinel_batch(content, truncated=(finish == "length"))
+        elif out:
+            print(f"[llm] batch truncated — salvaged {len(out)}/{len(items)} articles, rest retried next run")
+    for d in out.values():
+        if isinstance(d.get("content"), str):
+            d["content"] = _restore_images(_restore_code(d["content"], code_blocks), img_blocks)
     return out
 
 
