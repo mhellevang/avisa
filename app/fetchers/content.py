@@ -345,6 +345,23 @@ def _looks_like_liveblog(text: str) -> bool:
     return entries >= _LIVEBLOG_MIN_ENTRIES and entries >= 0.1 * len(lines)
 
 
+# Related/teaser widgets in Labrador CMS pages (The Register's 2026 relaunch,
+# many Norwegian papers): "most popular" / "more from this tag" link lists whose
+# items are each wrapped in their own <article> tag, while the real body is a
+# plain <div class="bodytext">. trafilatura's candidate scoring then picks the
+# widget subtree over the actual article and the story comes out as a list of
+# unrelated headlines. Prune the widgets before extraction; the class names are
+# the CMS's own component names, not generic words, so real content is safe.
+_PRUNE_XPATH = [
+    '//*[contains(@class, "articlesByTag")]',
+    '//*[contains(@class, "articleList")]',
+    # The Labrador article header holds kicker/title/standfirst/byline/share
+    # buttons — all rendered separately by the article page (the standfirst is
+    # the RSS summary shown as the ingress), so in the body it only duplicates.
+    '//*[contains(@class, "articleHeader")]',
+]
+
+
 # Thumbnail wrappers: many sites render article figures as <a href=full><img
 # src=thumb></a>. trafilatura discards images nested inside a link, so unwrap
 # such anchors to the bare <img> before extraction — otherwise an image-heavy
@@ -678,6 +695,7 @@ def _extract_text(
             # link", "Metadata" on e.g. GitHub) that favor_recall keeps. Pages
             # that under-extract fall through to the Playwright pass.
             favor_precision=True,
+            prune_xpath=_PRUNE_XPATH,
             output_format="markdown",
         )
     except Exception:
