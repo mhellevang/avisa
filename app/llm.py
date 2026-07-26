@@ -1,4 +1,5 @@
-"""Thin layer over OpenRouter for curation and translation.
+"""Thin layer over the LLM provider (Anthropic direct, OpenRouter or the local
+claude CLI) for curation and translation.
 
 Design principle: the app must work end-to-end WITHOUT a key. Then curation
 falls back to the latest stories and translation is skipped (the original text
@@ -20,6 +21,7 @@ from .catalog import TOPICS
 from .config import settings
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
 
 _claude_available: Optional[bool] = None
 
@@ -47,6 +49,10 @@ def _classify_llm_error(e: Exception) -> tuple[str, Optional[int]]:
     if isinstance(e, httpx.HTTPStatusError):
         code = e.response.status_code
         if code == 402:
+            return "credits", code
+        # Anthropic signals an empty balance as 400 invalid_request_error with
+        # "credit balance is too low" — not 402 like OpenRouter.
+        if code == 400 and "credit" in e.response.text.lower():
             return "credits", code
         if code in (401, 403):
             return "auth", code
@@ -80,8 +86,8 @@ def _record_llm_success() -> None:
 
 
 _WARNINGS = {
-    "credits": "OpenRouter: out of credits — curation and translation are paused",
-    "auth": "OpenRouter: API key rejected — curation and translation are paused",
+    "credits": "LLM: out of credits — curation and translation are paused",
+    "auth": "LLM: API key rejected — curation and translation are paused",
     "rate_limit": "LLM rate-limited — retrying automatically",
 }
 _WARNING_DEFAULT = "LLM unavailable — retrying automatically"
@@ -114,6 +120,8 @@ def active_provider() -> str:
     p = settings.llm_provider.lower()
     if p != "auto":
         return p
+    if settings.anthropic_api_key.strip():
+        return "anthropic"
     if settings.openrouter_api_key.strip():
         return "openrouter"
     if _claude_cli_available():
@@ -127,17 +135,17 @@ def enabled() -> bool:
 
 def provider_label() -> str:
     return {
+        "anthropic": "Anthropic",
         "openrouter": "OpenRouter",
         "claude_cli": "local Claude session",
         "none": "none (demo mode)",
     }.get(active_provider(), active_provider())
 
 
-def _chat_openrouter(model: str, system: str, user: str, max_tokens: int) -> tuple[Optional[str], str]:
-    """Returns (content, finish_reason). finish_reason "length" means the reply
-    was cut off by max_tokens — a JSON reply is then guaranteed unparseable, so
-    callers can react (split the batch / raise the budget) instead of retrying
-    the identical call forever."""
+def _hard_error_holdoff() -> bool:
+    """True = skip this call. With a dead key (out of credits / rejected), at
+    most one real HTTP probe per holdoff window — a burst of parallel batches
+    collapses into one probe instead of all hitting the dead key."""
     with _health_lock:
         err = _health["error"]
         if (
@@ -145,11 +153,19 @@ def _chat_openrouter(model: str, system: str, user: str, max_tokens: int) -> tup
             and err["kind"] in _HARD_KINDS
             and time.time() - _health["checked_at"] < _PROBE_HOLDOFF
         ):
-            # Dead key (out of credits / rejected): skip without touching
-            # checked_at, so a burst of parallel batches collapses into one
-            # real probe per holdoff window.
-            return None, ""
+            # Skip without touching checked_at, so the window doesn't slide.
+            return True
         _health["checked_at"] = time.time()
+    return False
+
+
+def _chat_openrouter(model: str, system: str, user: str, max_tokens: int) -> tuple[Optional[str], str]:
+    """Returns (content, finish_reason). finish_reason "length" means the reply
+    was cut off by max_tokens — a JSON reply is then guaranteed unparseable, so
+    callers can react (split the batch / raise the budget) instead of retrying
+    the identical call forever."""
+    if _hard_error_holdoff():
+        return None, ""
     try:
         resp = httpx.post(
             OPENROUTER_URL,
@@ -175,6 +191,51 @@ def _chat_openrouter(model: str, system: str, user: str, max_tokens: int) -> tup
     except Exception as e:
         _record_llm_failure(e)
         print(f"[llm] openrouter failed ({model}): {e}")
+        return None, ""
+
+
+def _anthropic_model(model: str) -> str:
+    """Maps an OpenRouter-style id ("anthropic/claude-haiku-4.5") to the
+    Anthropic API id ("claude-haiku-4-5"). Already-native ids pass through."""
+    return model.split("/")[-1].replace(".", "-")
+
+
+def _chat_anthropic(model: str, system: str, user: str, max_tokens: int) -> tuple[Optional[str], str]:
+    """Anthropic Messages API directly — same Claude models as via OpenRouter,
+    without the credit markup. Same (content, finish_reason) contract as
+    _chat_openrouter; Anthropic's stop_reason "max_tokens" maps to "length"."""
+    if _hard_error_holdoff():
+        return None, ""
+    try:
+        resp = httpx.post(
+            ANTHROPIC_URL,
+            headers={
+                "x-api-key": settings.anthropic_api_key,
+                "anthropic-version": "2023-06-01",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": _anthropic_model(model),
+                "max_tokens": max_tokens,
+                "system": system,
+                # Explicitly off: Sonnet 5 runs adaptive thinking when the field
+                # is omitted, which eats the max_tokens budget on translations.
+                "thinking": {"type": "disabled"},
+                "messages": [{"role": "user", "content": user}],
+            },
+            timeout=120.0,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        text = "".join(
+            b.get("text", "") for b in data.get("content", []) if b.get("type") == "text"
+        )
+        _record_llm_success()
+        finish = "length" if data.get("stop_reason") == "max_tokens" else (data.get("stop_reason") or "")
+        return text, finish
+    except Exception as e:
+        _record_llm_failure(e)
+        print(f"[llm] anthropic failed ({model}): {e}")
         return None, ""
 
 
@@ -205,6 +266,8 @@ def _chat_claude_cli(system: str, user: str) -> Optional[str]:
 def _chat_ex(model: str, system: str, user: str, max_tokens: int = 2000) -> tuple[Optional[str], str]:
     """(content, finish_reason) — finish_reason is "" when unknown (claude CLI)."""
     provider = active_provider()
+    if provider == "anthropic":
+        return _chat_anthropic(model, system, user, max_tokens)
     if provider == "openrouter":
         return _chat_openrouter(model, system, user, max_tokens)
     if provider == "claude_cli":

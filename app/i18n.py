@@ -71,10 +71,10 @@ CATALOG: dict[str, dict[str, str]] = {
         "demo mode: no LLM — raw curation, untranslated":
             "demo-modus: ingen LLM — råkuratert, uoversatt",
         # LLM health (masthead badge + settings)
-        "OpenRouter: out of credits — curation and translation are paused":
-            "OpenRouter: tom for kreditt — kuratering og oversettelse står stille",
-        "OpenRouter: API key rejected — curation and translation are paused":
-            "OpenRouter: API-nøkkel avvist — kuratering og oversettelse står stille",
+        "LLM: out of credits — curation and translation are paused":
+            "LLM: tom for kreditt — kuratering og oversettelse står stille",
+        "LLM: API key rejected — curation and translation are paused":
+            "LLM: API-nøkkel avvist — kuratering og oversettelse står stille",
         "LLM rate-limited — retrying automatically":
             "LLM-en er ratebegrenset — prøver igjen automatisk",
         "LLM unavailable — retrying automatically":
@@ -181,8 +181,8 @@ CATALOG: dict[str, dict[str, str]] = {
         "Latest story": "Nyeste sak",
         "Fallback selection": "Reserveutvalg",
         # backend: configurator chat
-        "I need an LLM to understand free text. Set OPENROUTER_API_KEY, or run locally with a logged-in claude session.":
-            "Jeg trenger en LLM for å forstå fritekst. Sett OPENROUTER_API_KEY, eller kjør lokalt med en innlogget claude-session.",
+        "I need an LLM to understand free text. Set ANTHROPIC_API_KEY or OPENROUTER_API_KEY, or run locally with a logged-in claude session.":
+            "Jeg trenger en LLM for å forstå fritekst. Sett ANTHROPIC_API_KEY eller OPENROUTER_API_KEY, eller kjør lokalt med en innlogget claude-session.",
         "Sorry, I couldn't interpret that. Try being a bit more specific?":
             "Beklager, jeg klarte ikke å tolke den. Prøv å være litt mer konkret?",
         "Done.": "Gjort.",

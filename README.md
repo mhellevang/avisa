@@ -101,9 +101,10 @@ to the DB and override the env.
 |----------|-----------|
 | `ADMIN_PASSWORD` | Protects the admin surfaces. Empty = no login (everything open). |
 | `SESSION_SECRET` | Cookie signing (optional; falls back to `ADMIN_PASSWORD`). |
-| `LLM_PROVIDER` | `auto` (recommended) / `openrouter` / `claude_cli` / `none`. |
-| `OPENROUTER_API_KEY` | OpenRouter key. Empty + `auto` = use the local Claude session. |
-| `CURATE_MODEL` / `TRANSLATE_MODEL` | OpenRouter model ID, e.g. `anthropic/claude-haiku-4.5`. |
+| `LLM_PROVIDER` | `auto` (recommended) / `anthropic` / `openrouter` / `claude_cli` / `none`. |
+| `ANTHROPIC_API_KEY` | Anthropic key (direct, no OpenRouter markup). Preferred by `auto` when set. |
+| `OPENROUTER_API_KEY` | OpenRouter key. No key at all + `auto` = use the local Claude session. |
+| `CURATE_MODEL` / `TRANSLATE_MODEL` | Model ID, e.g. `anthropic/claude-haiku-4.5` (the `anthropic/` prefix is stripped for the direct API). |
 | `CLAUDE_MODEL` | Model for the local claude CLI (empty = CLI default). Set to `haiku` for speed. |
 | `TRANSLATE_CONCURRENCY` | Number of translation batch calls at once (default 4). |
 | `TRANSLATE_BATCH_MAX` / `TRANSLATE_BATCH_CHARS` | How many articles / characters are packed per call. |

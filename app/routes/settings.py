@@ -285,7 +285,7 @@ def configure(background_tasks: BackgroundTasks, command: str = Form(...)):
     history = _load_chat()
     if not llm.enabled():
         history.append({"role": "user", "text": command})
-        history.append({"role": "bot", "text": i18n.current("I need an LLM to understand free text. Set OPENROUTER_API_KEY, or run locally with a logged-in claude session.")})
+        history.append({"role": "bot", "text": i18n.current("I need an LLM to understand free text. Set ANTHROPIC_API_KEY or OPENROUTER_API_KEY, or run locally with a logged-in claude session.")})
         _save_chat(history)
         return RedirectResponse(url="/settings#chat", status_code=303)
 

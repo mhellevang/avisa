@@ -68,7 +68,7 @@ def main() -> None:
 
     print(f"\nLLM provider: {llm.provider_label()}")
     if not llm.enabled():
-        print("  (Tip: set OPENROUTER_API_KEY in .env, or log in with "
+        print("  (Tip: set ANTHROPIC_API_KEY or OPENROUTER_API_KEY in .env, or log in with "
               "`claude` locally, for curation + translation.)")
 
     # Title + profile

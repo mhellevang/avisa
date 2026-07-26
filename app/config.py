@@ -6,10 +6,15 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    # LLM provider: "auto" | "openrouter" | "claude_cli" | "none"
-    #   auto  -> OpenRouter if a key is set, otherwise a local Claude session
-    #            (claude CLI) if available, otherwise no LLM (fallback).
+    # LLM provider: "auto" | "anthropic" | "openrouter" | "claude_cli" | "none"
+    #   auto  -> Anthropic if a key is set, otherwise OpenRouter if a key is
+    #            set, otherwise a local Claude session (claude CLI) if
+    #            available, otherwise no LLM (fallback).
     llm_provider: str = "auto"
+
+    # Anthropic direct (cheaper than OpenRouter for the same Claude models:
+    # no credit markup). https://platform.claude.com/
+    anthropic_api_key: str = ""
 
     # OpenRouter
     openrouter_api_key: str = ""
