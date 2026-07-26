@@ -61,11 +61,11 @@ def settings_page(request: Request, saved: int = 0, msg: str = "", region: str =
     have_urls = {(src.url or "").strip() for src in sources}
     # All regions' proposals are rendered up front; the region picker toggles
     # visibility client-side, so switching region can't drop unsaved edits in
-    # the main form.
+    # the main form. Already-added sources are left out — they live in the
+    # sources table above.
     proposed_by_region = {
         r["code"]: [
-            {**c, "already": c["url"] in have_urls}
-            for c in catalog.suggested_sources(r["code"])
+            c for c in catalog.suggested_sources(r["code"]) if c["url"] not in have_urls
         ]
         for r in catalog.REGIONS
     }

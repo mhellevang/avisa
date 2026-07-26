@@ -179,11 +179,13 @@
     {% for code, label in region_options %}
     <div class="check-grid sources-grid" data-region="{{ code }}"{% if code != selected_region %} hidden{% endif %}>
       {% for c in proposed_by_region[code] %}
-      <label class="check{{ ' is-added' if c.already }}">
-        <input type="checkbox" name="urls" value="{{ c.url }}"{% if c.already %} checked disabled{% endif %}>
+      <label class="check">
+        <input type="checkbox" name="urls" value="{{ c.url }}">
         <span class="src-name">{{ c.name }}</span>
-        <span class="src-meta">{{ c.section }} · {{ c.lang }}{% if c.already %} · {{ t("added") }}{% endif %}</span>
+        <span class="src-meta">{{ c.section }} · {{ c.lang }}</span>
       </label>
+      {% else %}
+      <p class="settings-hint">{{ t("Every suggestion for this region is already added.") }}</p>
       {% endfor %}
     </div>
     {% endfor %}

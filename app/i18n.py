@@ -235,7 +235,8 @@ CATALOG: dict[str, dict[str, str]] = {
         "Region": "Region",
         "Global sources are always suggested; pick a region for local ones.":
             "Globale kilder foreslås alltid; velg en region for lokale.",
-        "added": "lagt til",
+        "Every suggestion for this region is already added.":
+            "Alle forslag for denne regionen er allerede lagt til.",
         "Add selected": "Legg til valgte",
         "Added {n} sources.": "La til {n} kilder.",
         "No new sources added.": "Ingen nye kilder lagt til.",
