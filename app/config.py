@@ -38,7 +38,11 @@ class Settings(BaseSettings):
     build_version: str = "dev"
 
     # Pipeline / paper
+    # poll_minutes controls how often sources are checked (ingest + full text,
+    # no LLM). The paper itself is only curated/translated/rebuilt at the
+    # edition times below (HH:MM in the paper's timezone, comma-separated).
     poll_minutes: int = 30
+    edition_times: str = "06:30,12:30,18:30"
     front_page_size: int = 12
     # The paper's target language (ISO code). Content is translated TO this, and
     # the interface is shown in it (if localized — otherwise it falls back to

@@ -13,6 +13,7 @@ DEFAULTS: dict[str, str] = {
     "preferences": settings.preferences,
     "front_page_size": str(settings.front_page_size),
     "poll_minutes": str(settings.poll_minutes),
+    "edition_times": settings.edition_times,
     "translate_skip_langs": settings.translate_skip_langs,
     "paper_lang": settings.paper_lang,
 }
@@ -57,6 +58,30 @@ def front_page_size() -> int:
 
 def poll_minutes() -> int:
     return _as_int("poll_minutes", settings.poll_minutes)
+
+
+def parse_times(raw: str) -> list[str]:
+    """Normalizes a comma-separated list of HH:MM times. Invalid entries are
+    dropped; duplicates removed; sorted. Empty result = nothing valid."""
+    out = set()
+    for part in (raw or "").split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            h, m = part.split(":")
+            h, m = int(h), int(m)
+        except ValueError:
+            continue
+        if 0 <= h < 24 and 0 <= m < 60:
+            out.add(f"{h:02d}:{m:02d}")
+    return sorted(out)
+
+
+def edition_times() -> list[str]:
+    """Times of day (HH:MM, paper timezone) when a full edition is curated and
+    built. Falls back to the env default if nothing stored parses."""
+    return parse_times(get("edition_times")) or parse_times(settings.edition_times)
 
 
 def paper_lang() -> str:

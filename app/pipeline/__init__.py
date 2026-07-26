@@ -25,13 +25,42 @@ _run_lock = threading.Lock()
 
 
 def run_pipeline() -> dict:
+    """Full run: ingest -> curate -> translate -> build a new edition."""
+    return _locked(_run_pipeline)
+
+
+def run_ingest() -> dict:
+    """Ingest-only run between editions: fetch new stories and their full text.
+    No LLM steps — keeps the candidate pool fresh so the next edition build has
+    everything, without paying curation/translation on every poll."""
+    return _locked(_run_ingest)
+
+
+def _locked(fn) -> dict:
     if not _run_lock.acquire(blocking=False):
         print("[pipeline] already running — skipping this trigger")
         return {"skipped": True}
     try:
-        return _run_pipeline()
+        return fn()
     finally:
         _run_lock.release()
+
+
+def _run_ingest() -> dict:
+    N = 2
+    progress.begin()
+    try:
+        progress.stage("ingest", i18n.current("Fetching stories from the sources …"), 1, N)
+        new = ingest()
+
+        progress.stage("content", i18n.current("Fetching full text for new stories …"), 2, N)
+        fetched = fetch_new_content()
+
+        result = {"new": new, "content": fetched}
+        print(f"[pipeline] ingest-only {result}")
+        return result
+    finally:
+        progress.finish(locals().get("result"))
 
 
 def _run_pipeline() -> dict:

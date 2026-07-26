@@ -12,12 +12,17 @@ is an always-on background service, and reading is instant.
 ## How it fits together
 
 ```
-BACKGROUND (scheduler, every POLL_MINUTES)                  WEB (instant)
-  ingest → content → curate → content* → translate → build → front page / article / more
+BACKGROUND                                                  WEB (instant)
+  every POLL_MINUTES:            ingest → content          front page / article / more
+  at each EDITION_TIMES (full):  ingest → content → curate → content* → translate → build
   (RSS/   (full text   (LLM      (ensures   (LLM →      (stores
-   API/    for new      against   full text  Norwegian,  edition
+   API/    for new      against   full text  target lang, edition
    PW)     stories)     profile)  on front)  incl. body) in DB)
 ```
+
+Sources are polled continuously (no LLM cost); the paper itself — curation,
+translation and a new `Edition` — is only built a few times a day, at
+`EDITION_TIMES`. Fewer, bigger editions instead of a rolling rebuild.
 
 - **ingest** — fetches from the sources in `sources.yaml`. Three fetcher types like openpaper: RSS (feedparser), API (httpx), Playwright (Chromium for feedless JS pages). Deduplicates on URL hash.
 - **content** — fetches the **full body text** for new stories: static extraction (httpx + trafilatura) first, Playwright fallback for JS-heavy pages. Capped at the `CONTENT_FETCH_LIMIT` newest per run; front-page stories are guaranteed full text after curation.
@@ -93,7 +98,7 @@ own. Drop the `watchtower` service and pull manually (Dockge, or `docker compose
 
 ## Config (.env)
 
-Note: `PREFERENCES`, `PAPER_TITLE`, `FRONT_PAGE_SIZE` and `POLL_MINUTES` are only
+Note: `PREFERENCES`, `PAPER_TITLE`, `FRONT_PAGE_SIZE`, `POLL_MINUTES` and `EDITION_TIMES` are only
 *initial values*. If you change them in the settings (web/wizard), they are saved
 to the DB and override the env.
 
@@ -108,7 +113,8 @@ to the DB and override the env.
 | `CLAUDE_MODEL` | Model for the local claude CLI (empty = CLI default). Set to `haiku` for speed. |
 | `TRANSLATE_CONCURRENCY` | Number of translation batch calls at once (default 4). |
 | `TRANSLATE_BATCH_MAX` / `TRANSLATE_BATCH_CHARS` | How many articles / characters are packed per call. |
-| `POLL_MINUTES` | Initial value: how often polling runs. |
+| `POLL_MINUTES` | Initial value: how often sources are checked (ingest only, no LLM). |
+| `EDITION_TIMES` | Initial value: when the paper is curated and rebuilt, `HH:MM` in `TIMEZONE`, comma-separated (default `06:30,12:30,18:30`). |
 | `FRONT_PAGE_SIZE` | Initial value: number of stories in the paper. |
 | `CONTENT_FETCH_LIMIT` | Max new stories that get full text fetched per run. |
 | `USE_PLAYWRIGHT` | Browser fallback for JS-heavy pages (`true`/`false`). |

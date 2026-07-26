@@ -88,6 +88,7 @@ def settings_page(request: Request, saved: int = 0, msg: str = "", region: str =
             "topics": topics,
             "front_page_size_val": runtime_config.front_page_size(),
             "poll_minutes_val": runtime_config.poll_minutes(),
+            "edition_times_val": ", ".join(runtime_config.edition_times()),
             "paper_lang_val": plang,
             "ui_lang_options": [(c, i18n.lang_label(c)) for c in i18n.UI_LANGS],
             "source_lang_options": [(c, i18n.lang_label(c)) for c in i18n.LANG_NAMES],
@@ -115,6 +116,7 @@ def settings_save(
     paper_title: str = Form(...),
     front_page_size: int = Form(...),
     poll_minutes: int = Form(...),
+    edition_times: str = Form(""),
     topics: list[str] = Form(default=[]),
     preferences_extra: str = Form(""),
     paper_lang: str = Form("en"),
@@ -131,6 +133,9 @@ def settings_save(
     runtime_config.set_value("front_page_size", str(max(1, front_page_size)))
     poll = max(1, poll_minutes)
     runtime_config.set_value("poll_minutes", str(poll))
+    # Only store what parses; an all-invalid input falls back to the default.
+    runtime_config.set_value("edition_times", ",".join(runtime_config.parse_times(edition_times)))
+    scheduler.reschedule_editions()
     # Skip languages come in as checked boxes; normalize to comma-separated.
     langs = ",".join(sorted({p.strip().lower() for p in skip_langs if p.strip()}))
     runtime_config.set_value("translate_skip_langs", langs)

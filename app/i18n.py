@@ -65,6 +65,7 @@ CATALOG: dict[str, dict[str, str]] = {
         "Updated": "Oppdatert",
         "No.": "Nr.",
         "Morning edition": "Morgenutgave",
+        "Midday edition": "Middagsutgave",
         "Evening edition": "Kveldsutgave",
         "All worth knowing, before your coffee": "Alt verdt å vite, før kaffen",
         "Building the first edition …": "Bygger første utgave …",
@@ -133,7 +134,10 @@ CATALOG: dict[str, dict[str, str]] = {
         "Title": "Tittel",
         "Editorial profile (drives curation)": "Redaksjonell profil (styrer kurateringen)",
         "Front-page stories": "Saker på forsiden",
-        "Poll interval (minutes)": "Poll-intervall (minutter)",
+        "Source check (minutes)": "Kildesjekk (minutter)",
+        "Edition times": "Utgavetider",
+        "Sources are checked continuously; the paper itself is curated and rebuilt at the edition times.":
+            "Kildene sjekkes fortløpende; selve avisa kurateres og bygges på nytt ved utgavetidene.",
         "Paper language": "Avisas språk",
         "Content is translated to this language, and the interface is shown in it (where localized).":
             "Innhold oversettes til dette språket, og grensesnittet vises på det (om lokalisert).",
