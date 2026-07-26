@@ -51,7 +51,7 @@ def source_discover(query: str = Form(...)):
         )
     else:
         msg = "⚠ " + prop.get("reason", i18n.current("Couldn't figure out the source."))
-    return RedirectResponse(url=f"/settings?msg={quote(msg)}", status_code=303)
+    return RedirectResponse(url=f"/settings?msg={quote(msg)}#sources", status_code=303)
 
 
 @router.post("/sources/catalog-add")
@@ -112,7 +112,7 @@ def source_add(
             "config": cfg,
         }
     )
-    return RedirectResponse(url="/settings", status_code=303)
+    return RedirectResponse(url="/settings#sources", status_code=303)
 
 
 @router.post("/sources/{source_id}/lang")
@@ -123,7 +123,7 @@ def source_set_lang(source_id: int, lang: str = Form("")):
             # Empty is a valid choice: "unknown" → translated by default.
             src.lang = lang.strip().lower()
             s.commit()
-    return RedirectResponse(url="/settings", status_code=303)
+    return RedirectResponse(url="/settings#sources", status_code=303)
 
 
 @router.post("/sources/{source_id}/toggle")
@@ -133,7 +133,7 @@ def source_toggle(source_id: int):
         if src:
             src.enabled = not src.enabled
             s.commit()
-    return RedirectResponse(url="/settings", status_code=303)
+    return RedirectResponse(url="/settings#sources", status_code=303)
 
 
 @router.post("/sources/{source_id}/delete")
@@ -143,4 +143,4 @@ def source_delete(source_id: int):
         if src:
             s.delete(src)
             s.commit()
-    return RedirectResponse(url="/settings", status_code=303)
+    return RedirectResponse(url="/settings#sources", status_code=303)

@@ -140,6 +140,11 @@ CATALOG: dict[str, dict[str, str]] = {
         "Paper language": "Avisas språk",
         "Content is translated to this language, and the interface is shown in it (where localized).":
             "Innhold oversettes til dette språket, og grensesnittet vises på det (om lokalisert).",
+        "Changing the paper language clears all translations and re-translates everything from scratch. Continue?":
+            "Bytte av avisspråk sletter alle oversettelser og oversetter alt på nytt. Fortsette?",
+        "Ignored invalid edition times: {bad} (must be HH:MM). Now using: {times}.":
+            "Ignorerte ugyldige utgavetider: {bad} (må være TT:MM). Bruker nå: {times}.",
+        "unknown (translated)": "ukjent (oversettes)",
         "Leave untouched (don't translate these source languages)":
             "La stå urørt (ikke oversett disse kildespråkene)",
         "Stories from these source languages are shown in the original even if they differ from the paper language.":

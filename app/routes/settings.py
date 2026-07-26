@@ -1,6 +1,7 @@
 """Settings page and the free-text configurator chat."""
 
 import json
+from urllib.parse import quote
 
 from fastapi import APIRouter, BackgroundTasks, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -58,10 +59,16 @@ def settings_page(request: Request, saved: int = 0, msg: str = "", region: str =
 
     selected_region = (region or runtime_config.get("home_region") or "no").strip().lower()
     have_urls = {(src.url or "").strip() for src in sources}
-    proposed = [
-        {**c, "label": c["name"], "already": c["url"] in have_urls}
-        for c in catalog.suggested_sources(selected_region)
-    ]
+    # All regions' proposals are rendered up front; the region picker toggles
+    # visibility client-side, so switching region can't drop unsaved edits in
+    # the main form.
+    proposed_by_region = {
+        r["code"]: [
+            {**c, "already": c["url"] in have_urls}
+            for c in catalog.suggested_sources(r["code"])
+        ]
+        for r in catalog.REGIONS
+    }
 
     selected_topics = set(runtime_config.topic_keys())
     topics = [
@@ -97,7 +104,7 @@ def settings_page(request: Request, saved: int = 0, msg: str = "", region: str =
             "paper_lang_label": i18n.lang_label(plang),
             "region_options": [(r["code"], _label(r)) for r in catalog.REGIONS],
             "selected_region": selected_region,
-            "proposed_sources": proposed,
+            "proposed_by_region": proposed_by_region,
             "provider_label": llm.provider_label(),
             "llm_enabled": llm.enabled(),
             "llm_health": llm.health(),
@@ -132,6 +139,7 @@ def settings_save(
     # Only store what parses; an all-invalid input falls back to the default.
     runtime_config.set_value("edition_times", ",".join(runtime_config.parse_times(edition_times)))
     scheduler.reschedule_editions()
+    bad_times = [p.strip() for p in edition_times.split(",") if p.strip() and not runtime_config.parse_times(p)]
     # Skip languages come in as checked boxes; normalize to comma-separated.
     langs = ",".join(sorted({p.strip().lower() for p in skip_langs if p.strip()}))
     runtime_config.set_value("translate_skip_langs", langs)
@@ -157,7 +165,14 @@ def settings_save(
             s.commit()
         background_tasks.add_task(run_pipeline)
 
-    return RedirectResponse(url="/settings?saved=1", status_code=303)
+    url = "/settings?saved=1"
+    if bad_times:
+        warn = "⚠ " + i18n.current(
+            "Ignored invalid edition times: {bad} (must be HH:MM). Now using: {times}.",
+            bad=", ".join(bad_times), times=", ".join(runtime_config.edition_times()),
+        )
+        url += f"&msg={quote(warn)}"
+    return RedirectResponse(url=url, status_code=303)
 
 
 # --------------------------------------------------------------------------- #

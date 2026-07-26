@@ -8,7 +8,7 @@
 </header>
 
 {% if saved %}<p class="saved-note">{{ t("✓ Saved.") }}</p>{% endif %}
-{% if msg %}<p class="saved-note">{{ msg }}</p>{% endif %}
+{% if msg %}<p class="{{ 'warn-note' if msg.startswith('⚠') else 'saved-note' }}">{{ msg }}</p>{% endif %}
 
 <section class="settings-block configurator" id="chat">
   <h3>{{ t("💬 Talk to the configurator") }}</h3>
@@ -79,7 +79,7 @@
     </div>
     <p class="settings-hint">{{ t("Sources are checked continuously; the paper itself is curated and rebuilt at the edition times.") }}</p>
     <label>{{ t("Paper language") }}
-      <select name="paper_lang">
+      <select name="paper_lang" id="paper-lang" data-initial="{{ paper_lang_val }}">
         {% for code, label in ui_lang_options %}
         <option value="{{ code }}"{% if code == paper_lang_val %} selected{% endif %}>{{ label }}</option>
         {% endfor %}
@@ -106,10 +106,25 @@
     {% endif %}
     <button type="submit">{{ t("Save") }}</button>
   </form>
+  <script>
+    (function () {
+      const sel = document.getElementById('paper-lang');
+      if (!sel) return;
+      sel.form.addEventListener('submit', function (e) {
+        if (sel.value !== sel.dataset.initial &&
+            !confirm({{ t("Changing the paper language clears all translations and re-translates everything from scratch. Continue?") | tojson }})) {
+          e.preventDefault();
+        }
+      });
+    })();
+  </script>
 </section>
 
 <section class="settings-block" id="sources">
   <h3>{{ t("Sources") }}</h3>
+  {# The source actions redirect back to #sources — repeat the note here so it
+     isn't scrolled out of view above the fold. #}
+  {% if msg %}<p class="{{ 'warn-note' if msg.startswith('⚠') else 'saved-note' }}">{{ msg }}</p>{% endif %}
   <div class="table-scroll">
   <table class="sources-table">
     <thead><tr><th>{{ t("Name") }}</th><th>{{ t("Type") }}</th><th>{{ t("Section") }}</th><th>{{ t("Language") }}</th><th>{{ t("Status") }}</th><th></th></tr></thead>
@@ -122,9 +137,9 @@
         <td>
           <form action="/sources/{{ src.id }}/lang" method="post" class="lang-form">
             <select name="lang" onchange="this.form.requestSubmit()">
-              <option value=""{% if not src.lang %} selected{% endif %}>?</option>
+              <option value=""{% if not src.lang %} selected{% endif %}>{{ t("unknown (translated)") }}</option>
               {% for code, label in source_lang_options %}
-              <option value="{{ code }}"{% if code == src.lang %} selected{% endif %}>{{ code }}</option>
+              <option value="{{ code }}"{% if code == src.lang %} selected{% endif %}>{{ code }} — {{ label }}</option>
               {% endfor %}
             </select>
           </form>
@@ -146,20 +161,24 @@
   </div>
 
   <h4>{{ t("Suggested sources") }}</h4>
-  <form action="/settings" method="get" class="region-pick">
+  {# All regions are pre-rendered; the picker only toggles visibility, so
+     changing region never reloads the page (a reload dropped unsaved edits
+     in the profile form above). #}
+  <div class="region-pick">
     <label>{{ t("Region") }}
-      <select name="region" onchange="this.form.submit()">
+      <select id="region-select">
         {% for code, label in region_options %}
         <option value="{{ code }}"{% if code == selected_region %} selected{% endif %}>{{ label }}</option>
         {% endfor %}
       </select>
     </label>
     <span class="settings-hint">{{ t("Global sources are always suggested; pick a region for local ones.") }}</span>
-  </form>
+  </div>
   <form action="/sources/catalog-add" method="post" class="settings-form catalog-add">
-    <input type="hidden" name="region" value="{{ selected_region }}">
-    <div class="check-grid sources-grid">
-      {% for c in proposed_sources %}
+    <input type="hidden" name="region" id="region-field" value="{{ selected_region }}">
+    {% for code, label in region_options %}
+    <div class="check-grid sources-grid" data-region="{{ code }}"{% if code != selected_region %} hidden{% endif %}>
+      {% for c in proposed_by_region[code] %}
       <label class="check{{ ' is-added' if c.already }}">
         <input type="checkbox" name="urls" value="{{ c.url }}"{% if c.already %} checked disabled{% endif %}>
         <span class="src-name">{{ c.name }}</span>
@@ -167,8 +186,21 @@
       </label>
       {% endfor %}
     </div>
+    {% endfor %}
     <button type="submit">{{ t("Add selected") }}</button>
   </form>
+  <script>
+    (function () {
+      const sel = document.getElementById('region-select');
+      if (!sel) return;
+      sel.addEventListener('change', function () {
+        document.getElementById('region-field').value = sel.value;
+        document.querySelectorAll('.sources-grid[data-region]').forEach(function (el) {
+          el.hidden = el.dataset.region !== sel.value;
+        });
+      });
+    })();
+  </script>
 
   <h4>{{ t("Add a source — just paste a URL or a name") }}</h4>
   <form action="/sources/discover" method="post" class="settings-form smart-add">
@@ -194,9 +226,9 @@
         <label>{{ t("Section") }} <input type="text" name="section" value="News"></label>
         <label>{{ t("Language") }}
           <select name="lang">
-            <option value="" selected>?</option>
+            <option value="" selected>{{ t("unknown (translated)") }}</option>
             {% for code, label in source_lang_options %}
-            <option value="{{ code }}">{{ code }}</option>
+            <option value="{{ code }}">{{ code }} — {{ label }}</option>
             {% endfor %}
           </select>
         </label>

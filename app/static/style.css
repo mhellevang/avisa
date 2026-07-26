@@ -476,6 +476,7 @@ html { scroll-behavior: smooth; }
 
 /* ---------- Innstillinger ---------- */
 .saved-note { color: #2f5d3a; font-weight: 600; }
+.warn-note { color: #9c3f1e; font-weight: 600; }
 .settings-block {
   margin: 28px 0;
   padding-top: 18px;
