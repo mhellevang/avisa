@@ -98,7 +98,7 @@ own. Drop the `watchtower` service and pull manually (Dockge, or `docker compose
 
 ## Config (.env)
 
-Note: `PREFERENCES`, `PAPER_TITLE`, `FRONT_PAGE_SIZE`, `POLL_MINUTES` and `EDITION_TIMES` are only
+Note: `PREFERENCES`, `PAPER_TITLE`, `FRONT_PAGE_SIZE` and `EDITION_TIMES` are only
 *initial values*. If you change them in the settings (web/wizard), they are saved
 to the DB and override the env.
 
@@ -113,7 +113,7 @@ to the DB and override the env.
 | `CLAUDE_MODEL` | Model for the local claude CLI (empty = CLI default). Set to `haiku` for speed. |
 | `TRANSLATE_CONCURRENCY` | Number of translation batch calls at once (default 4). |
 | `TRANSLATE_BATCH_MAX` / `TRANSLATE_BATCH_CHARS` | How many articles / characters are packed per call. |
-| `POLL_MINUTES` | Initial value: how often sources are checked (ingest only, no LLM). |
+| `POLL_MINUTES` | How often sources are checked (ingest only, no LLM — default 30). |
 | `EDITION_TIMES` | Initial value: when the paper is curated and rebuilt, `HH:MM` in `TIMEZONE`, comma-separated (default `06:30,12:30,18:30`). |
 | `FRONT_PAGE_SIZE` | Initial value: number of stories in the paper. |
 | `CONTENT_FETCH_LIMIT` | Max new stories that get full text fetched per run. |

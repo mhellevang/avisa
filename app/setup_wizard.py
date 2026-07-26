@@ -86,8 +86,6 @@ def main() -> None:
 
     size = _ask("Number of stories on the front page", str(runtime_config.front_page_size()))
     runtime_config.set_value("front_page_size", size)
-    poll = _ask("Poll interval in minutes", str(runtime_config.poll_minutes()))
-    runtime_config.set_value("poll_minutes", poll)
 
     # Sources
     print("\n— Sources —")

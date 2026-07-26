@@ -39,8 +39,10 @@ class Settings(BaseSettings):
 
     # Pipeline / paper
     # poll_minutes controls how often sources are checked (ingest + full text,
-    # no LLM). The paper itself is only curated/translated/rebuilt at the
-    # edition times below (HH:MM in the paper's timezone, comma-separated).
+    # no LLM — so frequent polling is free and maximizes the candidate pool).
+    # Env-only; not exposed in the settings UI. The paper itself is only
+    # curated/translated/rebuilt at the edition times below (HH:MM in the
+    # paper's timezone, comma-separated).
     poll_minutes: int = 30
     edition_times: str = "06:30,12:30,18:30"
     front_page_size: int = 12

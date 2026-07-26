@@ -12,7 +12,6 @@ DEFAULTS: dict[str, str] = {
     "paper_title": settings.paper_title,
     "preferences": settings.preferences,
     "front_page_size": str(settings.front_page_size),
-    "poll_minutes": str(settings.poll_minutes),
     "edition_times": settings.edition_times,
     "translate_skip_langs": settings.translate_skip_langs,
     "paper_lang": settings.paper_lang,
@@ -54,10 +53,6 @@ def preferences() -> str:
 
 def front_page_size() -> int:
     return _as_int("front_page_size", settings.front_page_size)
-
-
-def poll_minutes() -> int:
-    return _as_int("poll_minutes", settings.poll_minutes)
 
 
 def parse_times(raw: str) -> list[str]:

@@ -87,7 +87,6 @@ def settings_page(request: Request, saved: int = 0, msg: str = "", region: str =
             "preferences_extra_val": extra_val,
             "topics": topics,
             "front_page_size_val": runtime_config.front_page_size(),
-            "poll_minutes_val": runtime_config.poll_minutes(),
             "edition_times_val": ", ".join(runtime_config.edition_times()),
             "paper_lang_val": plang,
             "ui_lang_options": [(c, i18n.lang_label(c)) for c in i18n.UI_LANGS],
@@ -115,7 +114,6 @@ def settings_save(
     background_tasks: BackgroundTasks,
     paper_title: str = Form(...),
     front_page_size: int = Form(...),
-    poll_minutes: int = Form(...),
     edition_times: str = Form(""),
     topics: list[str] = Form(default=[]),
     preferences_extra: str = Form(""),
@@ -131,8 +129,6 @@ def settings_save(
     runtime_config.set_value("preferences_extra", preferences_extra.strip())
     runtime_config.rebuild_preferences()
     runtime_config.set_value("front_page_size", str(max(1, front_page_size)))
-    poll = max(1, poll_minutes)
-    runtime_config.set_value("poll_minutes", str(poll))
     # Only store what parses; an all-invalid input falls back to the default.
     runtime_config.set_value("edition_times", ",".join(runtime_config.parse_times(edition_times)))
     scheduler.reschedule_editions()
@@ -161,7 +157,6 @@ def settings_save(
             s.commit()
         background_tasks.add_task(run_pipeline)
 
-    scheduler.reschedule(poll)
     return RedirectResponse(url="/settings?saved=1", status_code=303)
 
 
@@ -236,16 +231,6 @@ def _act_set_front_page_size(act) -> tuple[str | None, bool]:
     return i18n.current("set the front-page size to {value}", value=value), True
 
 
-def _act_set_poll_minutes(act) -> tuple[str | None, bool]:
-    try:
-        poll = max(1, int(act["value"]))
-    except (KeyError, TypeError, ValueError):
-        return None, False
-    runtime_config.set_value("poll_minutes", str(poll))
-    scheduler.reschedule(poll)
-    return i18n.current("set the poll interval to {value} min", value=poll), False
-
-
 def _act_topic(act) -> tuple[str | None, bool]:
     kind = act.get("action")
     key = str(act.get("key") or "").strip().lower()
@@ -274,7 +259,6 @@ _ACTION_HANDLERS = {
     "set_refinement": _act_set_refinement,
     "set_title": _act_set_title,
     "set_front_page_size": _act_set_front_page_size,
-    "set_poll_minutes": _act_set_poll_minutes,
     "select_topic": _act_topic,
     "deselect_topic": _act_topic,
 }
@@ -303,7 +287,6 @@ def configure(background_tasks: BackgroundTasks, command: str = Form(...)):
         runtime_config.preferences(),
         runtime_config.paper_title(),
         runtime_config.front_page_size(),
-        runtime_config.poll_minutes(),
         history=history,
         target=i18n.lang_prompt_name(plang),
         refinement=runtime_config.get("preferences_extra"),

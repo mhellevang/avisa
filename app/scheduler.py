@@ -39,7 +39,7 @@ def refresh_if_stale(built_at: datetime | None) -> bool:
     if built_at is None:
         target = run_pipeline
     else:
-        if time.time() - _last_ingest < runtime_config.poll_minutes() * 60:
+        if time.time() - _last_ingest < settings.poll_minutes * 60:
             return False
         target = _ingest_tick
     with _kick_lock:
@@ -75,7 +75,7 @@ def start_scheduler() -> BackgroundScheduler:
     if _scheduler:
         return _scheduler
 
-    minutes = runtime_config.poll_minutes()
+    minutes = settings.poll_minutes
     sched = BackgroundScheduler(timezone="UTC")
     sched.add_job(
         _ingest_tick,
@@ -90,13 +90,6 @@ def start_scheduler() -> BackgroundScheduler:
     _scheduler = sched
     print(f"[scheduler] polling sources every {minutes} min")
     return sched
-
-
-def reschedule(minutes: int) -> None:
-    """Changes the source poll interval at runtime (called from the settings page)."""
-    if _scheduler:
-        _scheduler.reschedule_job("poll", trigger="interval", minutes=minutes)
-        print(f"[scheduler] new poll interval: {minutes} min")
 
 
 def reschedule_editions() -> None:

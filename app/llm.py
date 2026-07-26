@@ -777,7 +777,6 @@ def interpret_config(
     preferences: str,
     title: str,
     front_page_size: int,
-    poll_minutes: int,
     history: Optional[list] = None,
     target: str = "English",
     refinement: str = "",
@@ -810,8 +809,7 @@ def interpret_config(
         f"PROFILE: {preferences}\n"
         f"EDITORIAL TOPICS (fixed, pickable by key): {topic_list}\n"
         f"REFINEMENT (current free text): {refinement or '(none)'}\n"
-        f"TITLE: {title} · FRONT_PAGE_SIZE: {front_page_size} · "
-        f"POLL_MIN: {poll_minutes}\n\n"
+        f"TITLE: {title} · FRONT_PAGE_SIZE: {front_page_size}\n\n"
         + (f"CONVERSATION SO FAR:\n{transcript}\n" if transcript else "")
         + f"LAST USER MESSAGE:\n{text}\n\n"
         "Produce only this JSON object, with no other text:\n"
@@ -823,7 +821,6 @@ def interpret_config(
         '{"action":"disable_source","name":"<source name>"}\n'
         '{"action":"set_title","value":"<title>"}\n'
         '{"action":"set_front_page_size","value":<integer>}\n'
-        '{"action":"set_poll_minutes","value":<integer>}\n'
         '{"action":"select_topic","key":"<topic key from EDITORIAL TOPICS>"}\n'
         '{"action":"deselect_topic","key":"<topic key from EDITORIAL TOPICS>"}\n'
         '{"action":"set_refinement","value":"<free-text nuance, in English>"}\n\n'

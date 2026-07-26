@@ -134,7 +134,6 @@ CATALOG: dict[str, dict[str, str]] = {
         "Title": "Tittel",
         "Editorial profile (drives curation)": "Redaksjonell profil (styrer kurateringen)",
         "Front-page stories": "Saker på forsiden",
-        "Source check (minutes)": "Kildesjekk (minutter)",
         "Edition times": "Utgavetider",
         "Sources are checked continuously; the paper itself is curated and rebuilt at the edition times.":
             "Kildene sjekkes fortløpende; selve avisa kurateres og bygges på nytt ved utgavetidene.",
@@ -202,7 +201,6 @@ CATALOG: dict[str, dict[str, str]] = {
         "updated the profile": "oppdaterte profilen",
         "set the title to «{value}»": "satte tittel til «{value}»",
         "set the front-page size to {value}": "satte forsidestørrelse til {value}",
-        "set the poll interval to {value} min": "satte poll-intervall til {value} min",
         # settings: configurator help texts and source form
         "e.g. «Add aftenposten.no, remove Hacker News, and more on climate» — or «what sources do I have?» (Enter to send, Shift+Enter for a new line)":
             "f.eks. «Legg til aftenposten.no, fjern Hacker News, og mer om klima» — eller «hvilke kilder har jeg?» (Enter for å sende, Shift+Enter for ny linje)",
