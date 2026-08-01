@@ -5,9 +5,10 @@ from sqlmodel import select
 from .. import progress, runtime_config
 from ..config import settings
 from ..db import get_session
-from ..i18n import current, lang_prompt_name
+from ..i18n import current, lang_prompt_name, to_local
 from ..llm import curate_articles
-from ..models import Article, Source, utcnow
+from ..models import Article, Edition, EditionItem, Source, utcnow
+from .build import edition_kind
 
 
 def curate() -> int:
@@ -45,6 +46,40 @@ def curate() -> int:
             if skipped:
                 print(f"[curate] skipped {skipped} behind paywall")
 
+        # No overlap between editions: a story runs in print at most once.
+        # Follow-ups arrive as new articles (new URLs) and stay eligible, so a
+        # running story reappears only when a source actually wrote something new.
+        printed = set(s.exec(select(EditionItem.article_id)).all())
+        before = len(rankable)
+        rankable = [a for a in rankable if a.id not in printed]
+        if before - len(rankable):
+            print(f"[curate] skipped {before - len(rankable)} already printed")
+        if not rankable:
+            # Nothing new since the last edition. Keep the selection as-is —
+            # build_edition skips when the selection matches the latest edition,
+            # so no clone edition is minted.
+            print("[curate] nothing unprinted to curate")
+            return 0
+
+        # Titles from today's earlier editions, so the editor can spot (and skip)
+        # candidates that merely retell what has already run.
+        now = utcnow()
+        today = to_local(now).date()
+        eds_today = [
+            e.id
+            for e in s.exec(select(Edition).order_by(Edition.id.desc()).limit(10)).all()
+            if to_local(e.built_at).date() == today
+        ]
+        printed_titles: list[str] = []
+        if eds_today:
+            printed_titles = list(dict.fromkeys(
+                s.exec(
+                    select(Article.title)
+                    .join(EditionItem, EditionItem.article_id == Article.id)
+                    .where(EditionItem.edition_id.in_(eds_today))
+                ).all()
+            ))[:60]
+
         sources = s.exec(select(Source)).all()
         source_names = {src.id: src.name for src in sources}
         source_langs = {src.id: (src.lang or "") for src in sources}
@@ -65,8 +100,10 @@ def curate() -> int:
             runtime_config.front_page_size(),
             target=lang_prompt_name(plang),
             source_names=source_names,
-            today=utcnow().date().isoformat(),
+            today=now.date().isoformat(),
             keep_in_lang=keep_in_lang,
+            edition_kind=edition_kind(now),
+            printed_titles=printed_titles,
         )
         if ranked is None:
             # Transient LLM failure (network, rate limit, garbled JSON): keep

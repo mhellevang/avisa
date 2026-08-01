@@ -316,7 +316,8 @@ def _extract_json(text: Optional[str]):
 def curate_articles(
     articles, preferences: str, n: int, target: str = "English",
     source_names: Optional[dict] = None, today: str = "",
-    keep_in_lang: Optional[dict] = None,
+    keep_in_lang: Optional[dict] = None, edition_kind: str = "",
+    printed_titles: Optional[list[str]] = None,
 ) -> Optional[list[dict]]:
     """Returns a list of {id, score, section, reason, deck} for the selected
     stories, or None when the LLM was unavailable / unparseable — the caller
@@ -359,14 +360,40 @@ def curate_articles(
         + (f"  ⟨reason+deck in {keep_in_lang[a.id]}⟩" if a.id in keep_in_lang else "")
         for a in cands
     )
+    # Each of the day's three papers has its own editorial slant.
+    kind_briefs = {
+        "morning": (
+            "This is the MORNING edition: set up the reader's day — the "
+            "overnight picture, the big stories, a broad overview."
+        ),
+        "afternoon": (
+            "This is the AFTERNOON edition: what has moved since the morning — "
+            "developing stories, fresh angles, the pulse of the day."
+        ),
+        "evening": (
+            "This is the EVENING edition: wind down the day — favour depth, "
+            "analysis, features and culture over breaking snippets."
+        ),
+    }
     system = (
-        "You are an experienced news editor assembling a personal morning paper "
+        "You are an experienced news editor assembling a personal newspaper "
         "for a single reader. You pick the most important and relevant stories "
         "and compose a balanced, varied front page — not just the loudest topic."
     )
     user = (
         f"The reader's editorial profile:\n{preferences}\n\n"
-        f"Pick the {n} best stories from the candidate list below and rank them "
+        + (f"{kind_briefs[edition_kind]}\n\n" if edition_kind in kind_briefs else "")
+        + (
+            "These stories already ran in today's earlier editions (they are not "
+            "in the candidate list — each story is printed once). Do not pick "
+            "candidates that merely retell them; a follow-up is only worth "
+            "picking if it adds a real development:\n"
+            + "\n".join(f"- {t}" for t in printed_titles)
+            + "\n\n"
+            if printed_titles
+            else ""
+        )
+        + f"Pick the {n} best stories from the candidate list below and rank them "
         f"(best first). For each, give a score between 0 and 1, place it in a "
         f"suitable section (e.g. World, Domestic, Technology, Science, Climate, "
         f"Economy, Culture), and give a short reason it was chosen.\n\n"

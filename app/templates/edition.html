@@ -1,9 +1,10 @@
 {% extends "base.html" %}
+{% block bodyclass %}{% if kind %}edition-{{ kind }}{% endif %}{% endblock %}
 {% block body %}
 <header class="masthead">
   <div class="masthead-top">
     <span class="folio folio-left">{% if edition %}{{ t("No.") }} {{ edition.id }}{% endif %}</span>
-    <span class="folio folio-mid">{% if edition %}{{ no_date(edition.built_at) }} · {% set _h = to_local(edition.built_at).hour %}{{ t("Evening edition") if _h >= 16 else (t("Midday edition") if _h >= 11 else t("Morning edition")) }}{% endif %}</span>
+    <span class="folio folio-mid">{% if edition %}{{ no_date(edition.built_at) }} · {{ kind_label(kind) }}{% endif %}</span>
     <span class="masthead-actions">
       {% if auth_enabled and not is_admin %}
         <a href="/login" class="settings-link">{{ t("Log in") }}</a>
@@ -17,11 +18,23 @@
     </span>
   </div>
   <h1 class="nameplate"><span class="ink">{{ paper_title() }}</span></h1>
-  <p class="motto">{{ t("All worth knowing, before your coffee") }}</p>
+  <p class="motto">{{ kind_motto(kind) }}</p>
   <div class="masthead-rule">
     {% if edition %}{{ t("Updated") }} {{ no_datetime(edition.built_at) }} <span class="edition-age" data-built="{{ edition.built_at.isoformat() }}"></span>{% else %}{{ t("Building the first edition …") }}{% endif %}
     {% if not llm_enabled %}<span class="badge">{{ t("demo mode: no LLM — raw curation, untranslated") }}</span>{% else %}<span class="badge {{ 'warn' if not llm_health.ok else 'ok' }}" id="llm-badge">{% if not llm_health.ok %}⚠ {{ llm_health.warning }}{% else %}{{ provider_label }}{% endif %}</span>{% endif %}
   </div>
+  {% if editions_today and editions_today|length > 1 %}
+  <nav class="editions-nav">
+    <span class="editions-nav-label">{{ t("Today's editions:") }}</span>
+    {% for e in editions_today %}
+      {% if e.id == edition.id %}
+      <span class="current">{{ kind_label(edition_kind_of(e)) }}</span>
+      {% else %}
+      <a href="/edition/{{ e.id }}">{{ kind_label(edition_kind_of(e)) }}</a>
+      {% endif %}
+    {% endfor %}
+  </nav>
+  {% endif %}
 </header>
 
 <!-- Diskret indikator: vises av JS når en nyere utgave finnes. Du oppdaterer selv. -->
@@ -139,6 +152,7 @@
 {% endif %}
 
 <script>
+{% if is_current %}
 (function () {
   const strip = document.getElementById('status-strip');
   const msgEl = document.getElementById('status-msg');
@@ -225,6 +239,7 @@
   }
   tick();
 })();
+{% endif %}
 
 // Relativ alder på gjeldende utgave («· for 2 t siden»), så det synes når
 // innholdet begynner å bli gammelt. Auto-lokalisert via Intl.

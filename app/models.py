@@ -74,6 +74,10 @@ class Edition(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     built_at: datetime = Field(default_factory=utcnow)
     title: str = "Morning Edition"
+    # "morning" | "afternoon" | "evening" — which of the day's papers this is.
+    # Stamped at build time from the local hour; "" on rows from before the
+    # column existed (display falls back to deriving it from built_at).
+    kind: str = ""
 
 
 class Setting(SQLModel, table=True):

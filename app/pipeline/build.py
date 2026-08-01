@@ -2,10 +2,28 @@ from typing import Optional
 
 from sqlmodel import select
 
-from .. import runtime_config
+from .. import i18n, runtime_config
 from ..config import settings
 from ..db import get_session
 from ..models import Article, Edition, EditionItem, utcnow
+
+# The three papers of the day. Labels are existing i18n keys.
+KIND_LABELS = {
+    "morning": "Morning edition",
+    "afternoon": "Midday edition",
+    "evening": "Evening edition",
+}
+
+
+def edition_kind(built_at) -> str:
+    """Which of the day's three papers an edition is, by local wall-clock hour:
+    morning < 11:00 ≤ afternoon < 16:00 ≤ evening."""
+    h = i18n.to_local(built_at).hour
+    if h >= 16:
+        return "evening"
+    if h >= 11:
+        return "afternoon"
+    return "morning"
 
 # Halving time for the recency weight. The LLM relevance score is multiplied by
 # 0.5 ** (age / RECENCY_HALF_LIFE_HOURS) so that a story this old loses half its
@@ -51,10 +69,28 @@ def build_edition() -> Optional[int]:
             print("[build] no selected stories — skipping edition")
             return None
 
+        # Identical selection (LLM failure kept it, or nothing new to curate):
+        # keep the latest edition instead of minting a clone — editions are
+        # distinct papers now, not rolling snapshots.
+        latest = s.exec(select(Edition).order_by(Edition.id.desc())).first()
+        if latest:
+            prev_ids = set(
+                s.exec(
+                    select(EditionItem.article_id).where(
+                        EditionItem.edition_id == latest.id
+                    )
+                ).all()
+            )
+            if prev_ids == {a.id for a in selected}:
+                print(f"[build] selection unchanged — keeping edition {latest.id}")
+                return latest.id
+
         now = utcnow()
         selected.sort(key=lambda a: _effective_score(a, now), reverse=True)
 
-        ed = Edition(built_at=utcnow(), title=runtime_config.paper_title())
+        ed = Edition(
+            built_at=now, title=runtime_config.paper_title(), kind=edition_kind(now)
+        )
         s.add(ed)
         s.commit()
         s.refresh(ed)

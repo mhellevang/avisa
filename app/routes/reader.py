@@ -13,21 +13,19 @@ from ..db import get_session
 from ..markdown import body_html
 from ..models import Article, Edition, EditionItem, Source, utcnow
 from ..pipeline import run_pipeline
-from .common import latest_edition_items, source_names, templates
+from .common import (
+    edition_items,
+    edition_kind_of,
+    editions_today,
+    latest_edition_items,
+    source_names,
+    templates,
+)
 
 router = APIRouter()
 
 
-@router.get("/", response_class=HTMLResponse)
-def front(request: Request):
-    with get_session() as s:
-        ed, items = latest_edition_items(s)
-        src_names = source_names(s)
-
-    # Pull fresh content when the edition has gone stale (e.g. the app was idle
-    # past the poll interval), so opening the paper isn't stuck on old news.
-    scheduler.refresh_if_stale(ed.built_at if ed else None)
-
+def _edition_context(request: Request, s, ed, items, is_current: bool) -> dict:
     lead = next((a for ei, a in items if ei.slot == "lead"), None)
     secondary = [a for ei, a in items if ei.slot == "secondary"]
     body = [a for ei, a in items if ei.slot == "body"]
@@ -38,23 +36,51 @@ def front(request: Request):
     for a in body:
         sections.setdefault(a.section, []).append(a)
 
-    return templates.TemplateResponse(
-        "edition.html",
-        {
-            "request": request,
-            "edition": ed,
-            "lead": lead,
-            "secondary": secondary,
-            "sections": sections,
-            "briefs": briefs,
-            "source_names": src_names,
-            "llm_enabled": llm.enabled(),
-            "llm_health": llm.health(),
-            "provider_label": llm.provider_label(),
-            "auth_enabled": auth.auth_enabled(),
-            "is_admin": auth.is_authed(request),
-        },
-    )
+    return {
+        "request": request,
+        "edition": ed,
+        "kind": edition_kind_of(ed),
+        "editions_today": editions_today(s, ed) if ed else [],
+        "is_current": is_current,
+        "lead": lead,
+        "secondary": secondary,
+        "sections": sections,
+        "briefs": briefs,
+        "source_names": source_names(s),
+        "llm_enabled": llm.enabled(),
+        "llm_health": llm.health(),
+        "provider_label": llm.provider_label(),
+        "auth_enabled": auth.auth_enabled(),
+        "is_admin": auth.is_authed(request),
+    }
+
+
+@router.get("/", response_class=HTMLResponse)
+def front(request: Request):
+    with get_session() as s:
+        ed, items = latest_edition_items(s)
+        ctx = _edition_context(request, s, ed, items, is_current=True)
+
+    # Pull fresh content when the edition has gone stale (e.g. the app was idle
+    # past the poll interval), so opening the paper isn't stuck on old news.
+    scheduler.refresh_if_stale(ed.built_at if ed else None)
+
+    return templates.TemplateResponse("edition.html", ctx)
+
+
+@router.get("/edition/{edition_id}", response_class=HTMLResponse)
+def edition_view(request: Request, edition_id: int):
+    """A specific edition — lets the reader page back to the day's earlier
+    papers. Same template as the front page; no freshness kick."""
+    with get_session() as s:
+        ed = s.get(Edition, edition_id)
+        if not ed:
+            return HTMLResponse(i18n.current("Edition not found"), status_code=404)
+        latest_id = s.exec(select(Edition.id).order_by(Edition.id.desc())).first()
+        ctx = _edition_context(
+            request, s, ed, edition_items(s, ed), is_current=ed.id == latest_id
+        )
+    return templates.TemplateResponse("edition.html", ctx)
 
 
 def _safe_next(next_url: str) -> str:

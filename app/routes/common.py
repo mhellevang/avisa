@@ -11,6 +11,7 @@ from sqlmodel import select
 from .. import i18n, runtime_config
 from ..markdown import body_html, dropcap_html
 from ..models import Article, Edition, EditionItem, Source
+from ..pipeline.build import KIND_LABELS, edition_kind
 
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
@@ -53,19 +54,53 @@ templates.env.globals["dropcap"] = dropcap
 # label and any other place a template needs the local wall-clock hour.
 templates.env.globals["to_local"] = i18n.to_local
 
+# Per-edition masthead bits. The motto follows the edition's slant.
+KIND_MOTTOS = {
+    "morning": "All worth knowing, before your coffee",
+    "afternoon": "The day so far — and what's still moving",
+    "evening": "Depth and perspective, to end the day",
+}
+templates.env.globals["kind_label"] = lambda k: t(KIND_LABELS.get(k, "Morning edition"))
+templates.env.globals["kind_motto"] = lambda k: t(
+    KIND_MOTTOS.get(k, KIND_MOTTOS["morning"])
+)
+
+
+def edition_items(s, ed: Edition) -> list[tuple[EditionItem, Article]]:
+    rows = s.exec(
+        select(EditionItem, Article)
+        .join(Article, EditionItem.article_id == Article.id)
+        .where(EditionItem.edition_id == ed.id)
+        .order_by(EditionItem.rank)
+    ).all()
+    return [(ei, a) for ei, a in rows]
+
 
 def latest_edition_items(s) -> tuple[Edition | None, list[tuple[EditionItem, Article]]]:
     ed = s.exec(select(Edition).order_by(Edition.id.desc())).first()
-    items: list[tuple[EditionItem, Article]] = []
-    if ed:
-        rows = s.exec(
-            select(EditionItem, Article)
-            .join(Article, EditionItem.article_id == Article.id)
-            .where(EditionItem.edition_id == ed.id)
-            .order_by(EditionItem.rank)
-        ).all()
-        items = [(ei, a) for ei, a in rows]
-    return ed, items
+    return ed, edition_items(s, ed) if ed else []
+
+
+def edition_kind_of(ed: Edition | None) -> str:
+    """Stored kind, or derived from built_at for rows predating the column."""
+    if not ed:
+        return ""
+    return ed.kind or edition_kind(ed.built_at)
+
+
+templates.env.globals["edition_kind_of"] = edition_kind_of
+
+
+def editions_today(s, ref: Edition) -> list[Edition]:
+    """The editions from the same local day as `ref`, oldest first — one per
+    kind (a manual refresh can rebuild a slot; the latest wins)."""
+    day = i18n.to_local(ref.built_at).date()
+    recent = s.exec(select(Edition).order_by(Edition.id.desc()).limit(20)).all()
+    by_kind: dict[str, Edition] = {}
+    for e in recent:  # newest first → first seen per kind is the latest
+        if i18n.to_local(e.built_at).date() == day:
+            by_kind.setdefault(edition_kind_of(e), e)
+    return sorted(by_kind.values(), key=lambda e: e.id)
 
 
 def source_names(s) -> dict[int, str]:

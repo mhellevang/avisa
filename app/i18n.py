@@ -68,6 +68,11 @@ CATALOG: dict[str, dict[str, str]] = {
         "Midday edition": "Middagsutgave",
         "Evening edition": "Kveldsutgave",
         "All worth knowing, before your coffee": "Alt verdt å vite, før kaffen",
+        "The day so far — and what's still moving":
+            "Dagen så langt — og det som fortsatt rører seg",
+        "Depth and perspective, to end the day": "Dybde og perspektiv til kvelden",
+        "Today's editions:": "Dagens utgaver:",
+        "Edition not found": "Fant ikke utgaven",
         "Building the first edition …": "Bygger første utgave …",
         "demo mode: no LLM — raw curation, untranslated":
             "demo-modus: ingen LLM — råkuratert, uoversatt",

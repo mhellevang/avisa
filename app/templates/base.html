@@ -31,7 +31,7 @@
   <link rel="stylesheet" href="/static/style.css">
   <link rel="stylesheet" href="/static/magic.css">
 </head>
-<body>
+<body class="{% block bodyclass %}{% endblock %}">
   <div class="paper grain">
     {% block body %}{% endblock %}
     <footer class="colophon">
