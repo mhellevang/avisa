@@ -801,57 +801,60 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 @keyframes newer-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 .newer-refresh { text-decoration: underline; text-underline-offset: 2px; }
 
-/* ---------- Dagens utgaver (navigasjon i mastheaden) ---------- */
-.editions-nav {
-  font-family: var(--serif);
-  font-size: 0.78rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-  border-bottom: 1px solid var(--rule);
-  padding: 5px 0;
-  display: flex;
-  justify-content: center;
-  gap: 14px;
-  flex-wrap: wrap;
-}
-.editions-nav a { color: var(--ink-soft); text-decoration: none; }
-.editions-nav a:hover { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
-.editions-nav .current { color: var(--accent); font-weight: 600; }
+/* ---------- Dagens utgaver (lenker i folio-linja) ---------- */
+.folio-mid a { color: var(--ink-soft); text-decoration: none; }
+.folio-mid a:hover { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+.folio-current { color: var(--accent); font-weight: 700; }
 
 /* ---------- Tema per utgave ----------
-   Morgen beholder standardpaletten (terrakotta). Ettermiddag og kveld får
-   egen aksent og en svak papirtone — i både lys og mørk drakt, så de
-   komponerer med den manuelle/system-styrte mørke moduset. */
+   Utgavens farge bæres av en krone øverst på arket og den doble linja i
+   mastheaden — aksenten farger allerede kickers, seksjonshoder og initialer.
+   Ettermiddag og kveld skifter i tillegg papir- og omgivelsestone, i både
+   lys og mørk drakt. Morgen = standard terrakotta på varmt papir. */
+.paper { border-top: 5px solid var(--accent); }
+.masthead-rule { border-top-color: var(--accent); }
+
 body.edition-afternoon {
   --accent: #1c5468;
-  --paper: #f1f1e9;
-  --paper-shade: #e8e8dc;
+  --paper: #eef1ec;
+  --paper-shade: #e2e7e0;
+  --rule: #b7c0b3;
+  --surround: #cfd6cc;
 }
 body.edition-evening {
   --accent: #58224e;
-  --paper: #f3ece9;
-  --paper-shade: #ebe2de;
+  --paper: #ede4e4;
+  --paper-shade: #e3d7d8;
+  --rule: #c2b0b8;
+  --surround: #d3c6cb;
 }
 :root[data-theme="dark"] body.edition-afternoon {
   --accent: #6fb3c9;
-  --paper: #191b1c;
-  --paper-shade: #212426;
+  --paper: #171b1c;
+  --paper-shade: #202527;
+  --rule: #39434a;
+  --surround: #0b0e0f;
 }
 :root[data-theme="dark"] body.edition-evening {
   --accent: #c98bb7;
-  --paper: #1c171b;
-  --paper-shade: #252025;
+  --paper: #1d1620;
+  --paper-shade: #271e29;
+  --rule: #463a4a;
+  --surround: #100c12;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) body.edition-afternoon {
     --accent: #6fb3c9;
-    --paper: #191b1c;
-    --paper-shade: #212426;
+    --paper: #171b1c;
+    --paper-shade: #202527;
+    --rule: #39434a;
+    --surround: #0b0e0f;
   }
   :root:not([data-theme="light"]) body.edition-evening {
     --accent: #c98bb7;
-    --paper: #1c171b;
-    --paper-shade: #252025;
+    --paper: #1d1620;
+    --paper-shade: #271e29;
+    --rule: #463a4a;
+    --surround: #100c12;
   }
 }

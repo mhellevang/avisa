@@ -71,7 +71,9 @@ CATALOG: dict[str, dict[str, str]] = {
         "The day so far — and what's still moving":
             "Dagen så langt — og det som fortsatt rører seg",
         "Depth and perspective, to end the day": "Dybde og perspektiv til kvelden",
-        "Today's editions:": "Dagens utgaver:",
+        "Morning": "Morgen",
+        "Afternoon": "Ettermiddag",
+        "Evening": "Kveld",
         "Edition not found": "Fant ikke utgaven",
         "Building the first edition …": "Bygger første utgave …",
         "demo mode: no LLM — raw curation, untranslated":

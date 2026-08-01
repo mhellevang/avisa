@@ -54,15 +54,26 @@ templates.env.globals["dropcap"] = dropcap
 # label and any other place a template needs the local wall-clock hour.
 templates.env.globals["to_local"] = i18n.to_local
 
-# Per-edition masthead bits. The motto follows the edition's slant.
+# Per-edition masthead bits. The motto follows the edition's slant; the short
+# names sit in the folio line, where the full "… edition" labels get too long.
 KIND_MOTTOS = {
     "morning": "All worth knowing, before your coffee",
     "afternoon": "The day so far — and what's still moving",
     "evening": "Depth and perspective, to end the day",
 }
+KIND_SHORT = {"morning": "Morning", "afternoon": "Afternoon", "evening": "Evening"}
 templates.env.globals["kind_label"] = lambda k: t(KIND_LABELS.get(k, "Morning edition"))
+templates.env.globals["kind_short"] = lambda k: t(KIND_SHORT.get(k, "Morning"))
 templates.env.globals["kind_motto"] = lambda k: t(
     KIND_MOTTOS.get(k, KIND_MOTTOS["morning"])
+)
+
+# Cache-buster for the stylesheets: the service worker serves /static/ assets
+# cache-first, so a deploy would otherwise show pages styled by the previous
+# CSS on the first load. The mtime changes the URL, which misses the cache.
+STATIC_DIR = TEMPLATES_DIR.parent / "static"
+templates.env.globals["static_v"] = str(
+    int(max(p.stat().st_mtime for p in STATIC_DIR.glob("*.css")))
 )
 
 
