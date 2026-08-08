@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% block bodyclass %}{% if kind %}edition-{{ kind }}{% endif %}{% endblock %}
 {% block title %}{{ t("More stories") }} — {{ paper_title() }}{% endblock %}
 {% block body %}
 <header class="article-head">

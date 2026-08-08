@@ -197,6 +197,7 @@ def article(request: Request, article_id: int):
         {
             "request": request,
             "a": a,
+            "kind": edition_kind_of(_ed),
             "prev_item": prev_item,
             "next_item": next_item,
             "read_min": read_min,
@@ -290,6 +291,7 @@ def more(request: Request, offset: int = 0, limit: int = 30):
         {
             "request": request,
             "articles": page,
+            "kind": edition_kind_of(ed),
             "source_names": src_names,
             "offset": offset,
             "limit": limit,
