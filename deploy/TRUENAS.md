@@ -22,9 +22,7 @@ Replace everywhere:
 ---
 
 ## 0. What you need first
-1. **OpenRouter key** — create at https://openrouter.ai/keys, add a little credit.
-   (The local `claude` CLI trick from the README does not work on the NAS — use
-   OpenRouter here.)
+1. **A ChatGPT subscription with Codex access.**
 2. **A domain on Cloudflare** — the domain's nameservers must point to Cloudflare
    (free plan is enough).
 3. **TrueNAS SCALE** with the Docker app layer (Electric Eel 24.10+ is native
@@ -59,11 +57,12 @@ Alongside the compose file, create the `.env` in the same stack directory:
 # --- Cloudflare Tunnel ---
 CF_TUNNEL_TOKEN=eyJ...        # the token copied in step 1
 
-# --- LLM (required on the NAS) ---
-LLM_PROVIDER=openrouter
-OPENROUTER_API_KEY=sk-or-...
-CURATE_MODEL=anthropic/claude-haiku-4.5
-TRANSLATE_MODEL=anthropic/claude-haiku-4.5
+# --- LLM ---
+LLM_PROVIDER=codex_cli
+CODEX_MODEL=
+TRANSLATE_CONCURRENCY=1
+TRANSLATE_BATCH_MAX=20
+TRANSLATE_BATCH_CHARS=24000
 
 # --- Login (set these — the paper is public) ---
 ADMIN_PASSWORD=<long random string>
@@ -79,12 +78,6 @@ PREFERENCES=General news, technology, climate and science. Weight on analysis ov
 
 See `.env.example` for every available variable.
 
-> **Set `OPENROUTER_API_KEY` before the first deploy.** Without it the first
-> edition builds in demo mode: no curation, no translation. Untranslated articles
-> are retried automatically once the key is in place, so nothing is stuck — but
-> the first impression is a raw, untranslated paper. Set the key up front and the
-> first edition is curated + translated correctly.
-
 ---
 
 ## 3. Deploy
@@ -93,11 +86,27 @@ In Dockge/Portainer: **Deploy / Up**. (CLI equivalent on the box:
 
 The `avisa` image is pulled from GHCR — no building on the NAS.
 
+Log in once from the stack directory:
+
+```bash
+docker compose -f docker-compose.truenas.yml exec avisa \
+  codex login -c 'cli_auth_credentials_store="file"' --device-auth
+docker compose -f docker-compose.truenas.yml restart avisa
+```
+
+Open the printed URL on another device and enter the one-time code. The login is
+stored in the separate `codex-auth` volume and survives image updates. Treat that
+volume like a password. If device login is unavailable, enable it in ChatGPT
+security settings. After login, press **Fetch new now** once in Avisa so an
+edition created before login is rebuilt with Codex.
+
 ---
 
 ## 4. Verify
 - `https://avis.dittdomene.no` → the front page builds (the first edition can
-  take a minute — reload).
+  take several minutes — reload).
+- `docker compose -f docker-compose.truenas.yml exec avisa codex login status`
+  → confirms the ChatGPT login.
 - `https://avis.dittdomene.no/status` → JSON, no errors.
 - `/settings` → prompts for the admin password.
 

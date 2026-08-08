@@ -136,7 +136,9 @@ def article(request: Request, article_id: int):
         # already in the target language or the source language is in "leave untouched".)
         src = s.get(Source, a.source_id)
         plang = runtime_config.paper_lang()
-        do_translate = llm.enabled() and runtime_config.should_translate(src.lang if src else "")
+        do_translate = llm.translation_enabled() and runtime_config.should_translate(
+            src.lang if src else ""
+        )
 
         # Title + summary are translated inline if missing — short text, quick.
         # The body is fetched NON-blockingly via /article/{id}/body after the
@@ -234,7 +236,9 @@ def article_body(article_id: int):
                 s.refresh(a)
 
         src = s.get(Source, a.source_id)
-        do_translate = llm.enabled() and runtime_config.should_translate(src.lang if src else "")
+        do_translate = llm.translation_enabled() and runtime_config.should_translate(
+            src.lang if src else ""
+        )
         if do_translate and a.content and a.content_no is None:
             plang = runtime_config.paper_lang()
             translated = llm.translate_body(

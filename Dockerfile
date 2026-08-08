@@ -4,6 +4,12 @@ FROM mcr.microsoft.com/playwright/python:v1.49.0-noble
 
 WORKDIR /app
 
+ARG CODEX_VERSION=0.147.0
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends nodejs npm \
+    && npm install -g "@openai/codex@${CODEX_VERSION}" \
+    && rm -rf /var/lib/apt/lists/*
+
 # Dependencies first for better layer caching
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt

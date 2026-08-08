@@ -42,7 +42,8 @@ The web routes read finished data:
 cd avisa
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env        # add OPENROUTER_API_KEY if you want curation + translation
+cp .env.example .env
+codex login                 # one-time ChatGPT login
 uvicorn app.main:app --reload
 ```
 
@@ -61,24 +62,27 @@ Feel free to use the control script instead of remembering commands:
 > **Everything works without an LLM**: the app falls back to the newest stories and
 > skips translation (keeping the original text), so you see the whole flow right away.
 
-### LLM locally — without an API key
+### LLM through your ChatGPT subscription
 
-On localhost you don't need OpenRouter. With `LLM_PROVIDER=auto` (default), the app
-uses your **logged-in `claude` CLI session** for curation and translation if no
-OpenRouter key is set. That gives you intelligent curation + Norwegian translation
-for free via your Claude Code subscription. On a server (without `claude`),
-OpenRouter is used.
+Set `LLM_PROVIDER=codex_cli`. Avisa uses the logged-in Codex CLI for both
+curation and translation. `CODEX_MODEL` can be left empty to use the current
+default model included with the subscription.
 
 ## Running on any Docker host
 
 ```bash
-cp .env.example .env        # fill in the key + optionally models/profile
+cp .env.example .env
 docker compose up -d --build
+docker compose exec avisa codex login -c 'cli_auth_credentials_store="file"' --device-auth
+docker compose restart avisa
 ```
 
-The SQLite database lives in a named volume (`avisa-data`), so the data survives
-restarts and redeploys. For HTTPS, put a reverse proxy (Caddy/nginx) in front, or
-expose it with a Cloudflare Tunnel (no open ports) — see below.
+If device login is unavailable, enable it in ChatGPT security settings. Then
+press **Fetch new now** once to rebuild any demo edition created before login.
+
+The SQLite database lives in `avisa-data`; Codex credentials live separately in
+`codex-auth`. Both named volumes survive restarts and redeploys. Treat
+`codex-auth` like a password.
 
 ## Self-hosting at home (Cloudflare Tunnel)
 
@@ -106,13 +110,14 @@ to the DB and override the env.
 |----------|-----------|
 | `ADMIN_PASSWORD` | Protects the admin surfaces. Empty = no login (everything open). |
 | `SESSION_SECRET` | Cookie signing (optional; falls back to `ADMIN_PASSWORD`). |
-| `LLM_PROVIDER` | `auto` (recommended) / `anthropic` / `openrouter` / `claude_cli` / `none`. |
+| `LLM_PROVIDER` | `codex_cli` (recommended) / `auto` / `anthropic` / `openrouter` / `claude_cli` / `none`. |
+| `CODEX_MODEL` | Codex model. Empty uses the subscription's current default. |
 | `ANTHROPIC_API_KEY` | Anthropic key (direct, no OpenRouter markup). Preferred by `auto` when set. |
 | `OPENROUTER_API_KEY` | OpenRouter key. No key at all + `auto` = use the local Claude session. |
 | `CURATE_MODEL` / `TRANSLATE_MODEL` | Model ID, e.g. `anthropic/claude-haiku-4.5` (the `anthropic/` prefix is stripped for the direct API). |
 | `CLAUDE_MODEL` | Model for the local claude CLI (empty = CLI default). Set to `haiku` for speed. |
-| `TRANSLATE_CONCURRENCY` | Number of translation batch calls at once (default 4). |
-| `TRANSLATE_BATCH_MAX` / `TRANSLATE_BATCH_CHARS` | How many articles / characters are packed per call. |
+| `TRANSLATE_CONCURRENCY` | Number of translation batch calls at once (default 1). |
+| `TRANSLATE_BATCH_MAX` / `TRANSLATE_BATCH_CHARS` | Articles / characters packed per call (defaults 20 / 24000). |
 | `POLL_MINUTES` | How often sources are checked (ingest only, no LLM — default 30). |
 | `EDITION_TIMES` | Initial value: when the paper is curated and rebuilt, `HH:MM` in `TIMEZONE`, comma-separated (default `06:30,12:30,18:30`). |
 | `FRONT_PAGE_SIZE` | Initial value: number of stories in the paper. |
@@ -120,6 +125,19 @@ to the DB and override the env.
 | `USE_PLAYWRIGHT` | Browser fallback for JS-heavy pages (`true`/`false`). |
 | `PREFERENCES` | Initial value: editorial profile that drives curation. |
 | `PAPER_TITLE` | Initial value: title of the paper. |
+
+For Codex in Docker, use:
+
+```dotenv
+LLM_PROVIDER=codex_cli
+CODEX_MODEL=
+TRANSLATE_CONCURRENCY=1
+TRANSLATE_BATCH_MAX=20
+TRANSLATE_BATCH_CHARS=24000
+```
+
+Then run the one-time device login shown above. Both tasks use the same Codex
+subscription and credential volume.
 
 ## Configuring sources and preferences
 

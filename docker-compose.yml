@@ -12,9 +12,12 @@ services:
     environment:
       # Override the DB path so it lands in the persistent volume
       DATABASE_URL: sqlite:////data/avisa.db
+      CODEX_HOME: /var/lib/codex
     volumes:
       - avisa-data:/data
+      - codex-auth:/var/lib/codex
     restart: unless-stopped
 
 volumes:
   avisa-data:
+  codex-auth:

@@ -35,7 +35,9 @@ def _article_debug(s, a: Article, full: bool = False) -> dict:
     decide how it's rendered. `full` returns whole bodies; otherwise excerpts."""
     src = s.get(Source, a.source_id)
     plang = runtime_config.paper_lang()
-    do_translate = llm.enabled() and runtime_config.should_translate(src.lang if src else "")
+    do_translate = llm.translation_enabled() and runtime_config.should_translate(
+        src.lang if src else ""
+    )
 
     placement = None
     ed = s.exec(select(Edition).order_by(Edition.id.desc())).first()
@@ -195,8 +197,8 @@ def debug_retranslate(article_id: int):
     """Re-run translation for one article synchronously (overwrites the cache),
     then return the fresh trace. Lets you test a translation-prompt fix on a
     single article."""
-    if not llm.enabled():
-        return JSONResponse({"error": "llm not enabled (no API key)"}, status_code=400)
+    if not llm.translation_enabled():
+        return JSONResponse({"error": "translation not enabled"}, status_code=400)
     with get_session() as s:
         a = s.get(Article, article_id)
         if not a:
@@ -250,7 +252,7 @@ def debug_reprocess(article_id: int):
         a = s.get(Article, article_id)
         if not a:  # deleted while we were fetching (e.g. by pruning)
             return JSONResponse({"error": "not found"}, status_code=404)
-        if llm.enabled():
+        if llm.translation_enabled():
             retranslated = _force_retranslate(s, a)
         result = _article_debug(s, a, full=True)
     result["refetch_got_text"] = bool(got)

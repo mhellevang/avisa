@@ -68,8 +68,7 @@ def main() -> None:
 
     print(f"\nLLM provider: {llm.provider_label()}")
     if not llm.enabled():
-        print("  (Tip: set ANTHROPIC_API_KEY or OPENROUTER_API_KEY in .env, or log in with "
-              "`claude` locally, for curation + translation.)")
+        print("  (Tip: run `codex login --device-auth` for curation and translation.)")
 
     # Title + profile
     print("\n— Paper —")

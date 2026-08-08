@@ -6,11 +6,12 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    # LLM provider: "auto" | "anthropic" | "openrouter" | "claude_cli" | "none"
-    #   auto  -> Anthropic if a key is set, otherwise OpenRouter if a key is
-    #            set, otherwise a local Claude session (claude CLI) if
-    #            available, otherwise no LLM (fallback).
+    # LLM provider: "auto" | "codex_cli" | "anthropic" | "openrouter" |
+    # "claude_cli" | "none".
     llm_provider: str = "auto"
+
+    # Logged-in Codex CLI. Empty model uses the subscription's current default.
+    codex_model: str = ""
 
     # Anthropic direct (cheaper than OpenRouter for the same Claude models:
     # no credit markup). https://platform.claude.com/
@@ -57,9 +58,9 @@ class Settings(BaseSettings):
     content_min_chars: int = 400  # below this the extraction counts as failed
     filter_paywalled: bool = True  # exclude stories behind a paywall
     translate_body_max_chars: int = 16000  # cap on body text sent to translation (covers long-reads; stays within the 8000-token output budget)
-    translate_concurrency: int = 4  # number of translation calls run in parallel
-    translate_batch_chars: int = 9000  # max chars total per batch call
-    translate_batch_max: int = 5  # max articles per batch call
+    translate_concurrency: int = 1  # Codex batches run sequentially
+    translate_batch_chars: int = 24000  # max chars total per batch call
+    translate_batch_max: int = 20  # max articles per batch call
     # Comma-separated language codes you want left UNTOUCHED even if they differ
     # from the target language (you read them fine yourself). Content already in
     # the target language is never translated regardless. Empty by default — the

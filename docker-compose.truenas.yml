@@ -19,8 +19,10 @@ services:
       - .env
     environment:
       DATABASE_URL: sqlite:////data/avisa.db
+      CODEX_HOME: /var/lib/codex
     volumes:
       - avisa-data:/data
+      - codex-auth:/var/lib/codex
     # Let Watchtower auto-update this container when :latest changes in GHCR.
     # Scoped by label so Watchtower only touches this stack (WATCHTOWER_LABEL_ENABLE).
     labels:
@@ -50,3 +52,4 @@ services:
 
 volumes:
   avisa-data:
+  codex-auth:

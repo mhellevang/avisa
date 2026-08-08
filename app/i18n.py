@@ -81,8 +81,8 @@ CATALOG: dict[str, dict[str, str]] = {
         # LLM health (masthead badge + settings)
         "LLM: out of credits — curation and translation are paused":
             "LLM: tom for kreditt — kuratering og oversettelse står stille",
-        "LLM: API key rejected — curation and translation are paused":
-            "LLM: API-nøkkel avvist — kuratering og oversettelse står stille",
+        "LLM login rejected — curation and translation are paused":
+            "LLM-innlogging avvist — kuratering og oversettelse står stille",
         "LLM rate-limited — retrying automatically":
             "LLM-en er ratebegrenset — prøver igjen automatisk",
         "LLM unavailable — retrying automatically":
@@ -132,10 +132,8 @@ CATALOG: dict[str, dict[str, str]] = {
         "Clear conversation": "Tøm samtale",
         "Describe in your own words what you want to change — or ask about the setup. It replies and acts.":
             "Skriv med egne ord hva du vil endre — eller spør om oppsettet. Den svarer og utfører.",
-        "Requires an LLM. Set": "Krever en LLM. Sett",
-        "or run locally with a logged-in": "eller kjør lokalt med en innlogget",
-        "session, then you can control everything with free text here.":
-            "-session, så kan du styre alt med fritekst her.",
+        "Requires a logged-in Codex session. Run": "Krever en innlogget Codex-session. Kjør",
+        "in the container.": "i containeren.",
         "Paper & profile": "Avis & profil",
         "LLM:": "LLM:",
         "Title": "Tittel",
@@ -192,12 +190,12 @@ CATALOG: dict[str, dict[str, str]] = {
         "Translating {done}/{total}": "Oversetter {done}/{total}",
         # backend: article / curation fallback
         "Article not found": "Fant ikke artikkelen",
-        "Latest story (no LLM key set)": "Nyeste sak (ingen LLM-nøkkel satt)",
+        "Latest story (no LLM configured)": "Nyeste sak (ingen LLM konfigurert)",
         "Latest story": "Nyeste sak",
         "Fallback selection": "Reserveutvalg",
         # backend: configurator chat
-        "I need an LLM to understand free text. Set ANTHROPIC_API_KEY or OPENROUTER_API_KEY, or run locally with a logged-in claude session.":
-            "Jeg trenger en LLM for å forstå fritekst. Sett ANTHROPIC_API_KEY eller OPENROUTER_API_KEY, eller kjør lokalt med en innlogget claude-session.",
+        "I need a logged-in Codex session to understand free text. Run codex login --device-auth in the container.":
+            "Jeg trenger en innlogget Codex-session for å forstå fritekst. Kjør codex login --device-auth i containeren.",
         "Sorry, I couldn't interpret that. Try being a bit more specific?":
             "Beklager, jeg klarte ikke å tolke den. Prøv å være litt mer konkret?",
         "Done.": "Gjort.",
