@@ -75,14 +75,7 @@ def settings_page(request: Request, saved: int = 0, msg: str = "", region: str =
         {"key": t["key"], "label": _label(t), "checked": t["key"] in selected_topics}
         for t in catalog.TOPICS
     ]
-    # If the user has a custom free-text profile from before (different from the
-    # default) and hasn't picked topics yet, seed the refinement box with it so
-    # switching to topics doesn't silently drop it.
     extra_val = runtime_config.get("preferences_extra")
-    if not selected_topics and not extra_val:
-        current = runtime_config.preferences()
-        if current and current != settings.preferences:
-            extra_val = current
 
     return templates.TemplateResponse(
         "settings.html",
@@ -130,48 +123,79 @@ def settings_save(
     runtime_config.set_value("paper_title", paper_title.strip())
     # Profile is derived from the chosen topics plus optional free-text
     # refinement — rebuild_preferences is the single writer of `preferences`.
+    had_profile = bool(runtime_config.topic_keys()) or bool(
+        runtime_config.get("preferences_extra").strip()
+    )
     valid = {t["key"] for t in catalog.TOPICS}
     chosen = [t for t in topics if t in valid]
     runtime_config.set_value("profile_topics", ",".join(chosen))
     runtime_config.set_value("preferences_extra", preferences_extra.strip())
     runtime_config.rebuild_preferences()
-    runtime_config.set_value("front_page_size", str(max(1, front_page_size)))
+    if had_profile and not chosen and not preferences_extra.strip():
+        # Everything deselected and the free text cleared is an explicit reset;
+        # rebuild_preferences never wipes, so fall back to the env default here.
+        runtime_config.set_value("preferences", settings.preferences)
+    runtime_config.set_value("front_page_size", str(max(1, min(60, front_page_size))))
     # Only store what parses; an all-invalid input falls back to the default.
     runtime_config.set_value("edition_times", ",".join(runtime_config.parse_times(edition_times)))
     scheduler.reschedule_editions()
     bad_times = [p.strip() for p in edition_times.split(",") if p.strip() and not runtime_config.parse_times(p)]
     # Skip languages come in as checked boxes; normalize to comma-separated.
-    langs = ",".join(sorted({p.strip().lower() for p in skip_langs if p.strip()}))
-    runtime_config.set_value("translate_skip_langs", langs)
+    old_skip = runtime_config.skip_langs()
+    new_skip = {p.strip().lower() for p in skip_langs if p.strip()}
+    runtime_config.set_value("translate_skip_langs", ",".join(sorted(new_skip)))
 
-    # Switching target language: the old translation cache is in the wrong
-    # language. Reset it and rebuild the paper so everything is re-translated
-    # to the new language.
     new_lang = (paper_lang or "en").strip().lower()
     lang_changed = new_lang != runtime_config.paper_lang()
     runtime_config.set_value("paper_lang", new_lang)
-    if lang_changed:
-        with get_session() as s:
+
+    # Cached translations that no longer apply are cleared so the change is
+    # visible at once: a language switch invalidates the whole cache; a newly
+    # skipped source language invalidates just that language's articles.
+    with get_session() as s:
+        stale = []
+        if lang_changed:
             stale = s.exec(
                 select(Article).where(
                     Article.title_no != None,  # noqa: E711
                     (Article.translated_lang == None) | (Article.translated_lang != new_lang),  # noqa: E711
                 )
             ).all()
-            for a in stale:
-                a.title_no = a.summary_no = a.content_no = None
-                a.translated_lang = None
-                a.translated_at = None
-            s.commit()
+        elif new_skip - old_skip:
+            src_ids = [
+                src.id for src in s.exec(select(Source)).all()
+                if (src.lang or "").strip().lower() in (new_skip - old_skip)
+            ]
+            if src_ids:
+                stale = s.exec(
+                    select(Article).where(
+                        Article.source_id.in_(src_ids),
+                        Article.title_no != None,  # noqa: E711
+                    )
+                ).all()
+        for a in stale:
+            a.title_no = a.summary_no = a.content_no = None
+            a.translated_lang = None
+            a.translated_at = None
+        s.commit()
+
+    rebuilding = lang_changed or new_skip != old_skip
+    if rebuilding:
         background_tasks.add_task(run_pipeline)
 
     url = "/settings?saved=1"
+    notes = []
     if bad_times:
-        warn = "⚠ " + i18n.current(
+        notes.append("⚠ " + i18n.current(
             "Ignored invalid edition times: {bad} (must be HH:MM). Now using: {times}.",
             bad=", ".join(bad_times), times=", ".join(runtime_config.edition_times()),
-        )
-        url += f"&msg={quote(warn)}"
+        ))
+    if rebuilding:
+        notes.append(i18n.current(
+            "The paper is being rebuilt in the background — translations appear gradually."
+        ))
+    if notes:
+        url += f"&msg={quote(' '.join(notes))}"
     return RedirectResponse(url=url, status_code=303)
 
 

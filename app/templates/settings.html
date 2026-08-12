@@ -160,7 +160,19 @@
   </table>
   </div>
 
-  <h4>{{ t("Suggested sources") }}</h4>
+  <h4>{{ t("Add a source — just paste a URL or a name") }}</h4>
+  <form action="/sources/discover" method="post" class="settings-form smart-add">
+    <div class="settings-row">
+      <input type="text" name="query" placeholder="{{ t('e.g. nrk.no or https://www.aftenposten.no') }}" required>
+      <button type="submit">{{ t("Figure it out") }}</button>
+    </div>
+    <p class="settings-hint">{{ t("We find the RSS feed automatically") }}{% if llm_enabled %}{{ t(" and let Claude name and categorize it.") }}{% else %}.{% endif %}</p>
+  </form>
+
+  {# Collapsed by default so the page has one source list; opened on a fresh
+     install where the suggestions are the natural starting point. #}
+  <details class="advanced"{% if not sources %} open{% endif %}>
+  <summary>{{ t("Suggested sources") }}</summary>
   {# All regions are pre-rendered; the picker only toggles visibility, so
      changing region never reloads the page (a reload dropped unsaved edits
      in the profile form above). #}
@@ -203,15 +215,7 @@
       });
     })();
   </script>
-
-  <h4>{{ t("Add a source — just paste a URL or a name") }}</h4>
-  <form action="/sources/discover" method="post" class="settings-form smart-add">
-    <div class="settings-row">
-      <input type="text" name="query" placeholder="{{ t('e.g. nrk.no or https://www.aftenposten.no') }}" required>
-      <button type="submit">{{ t("Figure it out") }}</button>
-    </div>
-    <p class="settings-hint">{{ t("We find the RSS feed automatically") }}{% if llm_enabled %}{{ t(" and let Claude name and categorize it.") }}{% else %}.{% endif %}</p>
-  </form>
+  </details>
 
   <details class="advanced">
     <summary>{{ t("Advanced: add manually") }}</summary>

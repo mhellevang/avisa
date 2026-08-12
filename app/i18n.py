@@ -213,6 +213,8 @@ CATALOG: dict[str, dict[str, str]] = {
         "Understood the message, but found nothing to change.":
             "Forsto meldingen, men fant ingenting å endre.",
         "Rebuilding the paper …": "Bygger avisa på nytt …",
+        "The paper is being rebuilt in the background — translations appear gradually.":
+            "Avisa bygges på nytt i bakgrunnen — oversettelser kommer etter hvert.",
         "added «{name}»": "la til «{name}»",
         "couldn't find a source for «{query}»": "fant ikke kilde for «{query}»",
         "couldn't find the source «{name}»": "fant ikke kilden «{name}»",
