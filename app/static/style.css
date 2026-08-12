@@ -1,36 +1,39 @@
+/* Identitet: norsk dagsavis. Kjølig avispapir-grått (ikke krem), blåsvart
+   trykksverte. Aksenten følger døgnet: morgenblå er standard; ettermiddag og
+   kveld overstyres lenger ned. Navnetrekket settes i blackletter — kun der. */
 :root {
-  --ink: #1a1714;
-  --ink-soft: #4a443d;
-  --paper: #f4efe6;
-  --paper-shade: #ece5d8;
-  --rule: #cbbfa9;
-  --accent: #7a2b1d;
-  --serif: "Source Serif 4", Georgia, serif;
-  --display: "Playfair Display", Georgia, serif;
-  --body-serif: "Spectral", Georgia, serif;
-  --surround: #ddd5c4;
+  --ink: #191b1f;
+  --ink-soft: #4f545b;
+  --paper: #f3f2ee;
+  --paper-shade: #e9e8e3;
+  --rule: #c7c8c2;
+  --accent: #2c5f8a;
+  --label: "Archivo Narrow", "Arial Narrow", Arial, sans-serif;
+  --display: "Besley", Georgia, serif;
+  --body-serif: "Newsreader", Georgia, serif;
+  --blackletter: "UnifrakturMaguntia", Georgia, serif;
+  --surround: #d6d7d1;
 }
 
-/* Mørk palett — gjenbrukt av både system-preferanse og manuell veksling.
-   Holdt varm («kveldsutgave») for å matche papir-estetikken. */
+/* Mørk palett — gjenbrukt av både system-preferanse og manuell veksling. */
 :root[data-theme="dark"] {
-  --ink: #e9e2d5;
-  --ink-soft: #a59c8c;
-  --paper: #1b1916;
-  --paper-shade: #24211d;
-  --rule: #423d35;
-  --accent: #d07a57;
-  --surround: #0f0e0c;
+  --ink: #e3e3de;
+  --ink-soft: #999b95;
+  --paper: #1a1b1e;
+  --paper-shade: #232428;
+  --rule: #3a3c40;
+  --accent: #86b0da;
+  --surround: #0e0f11;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --ink: #e9e2d5;
-    --ink-soft: #a59c8c;
-    --paper: #1b1916;
-    --paper-shade: #24211d;
-    --rule: #423d35;
-    --accent: #d07a57;
-    --surround: #0f0e0c;
+    --ink: #e3e3de;
+    --ink-soft: #999b95;
+    --paper: #1a1b1e;
+    --paper-shade: #232428;
+    --rule: #3a3c40;
+    --accent: #86b0da;
+    --surround: #0e0f11;
   }
 }
 
@@ -48,7 +51,7 @@ html, body {
   max-width: 1180px;
   margin: 0 auto;
   background: var(--paper);
-  background-image: radial-gradient(rgba(120,100,70,0.035) 1px, transparent 1px);
+  background-image: radial-gradient(rgba(70,75,85,0.04) 1px, transparent 1px);
   background-size: 4px 4px;
   padding: 28px clamp(16px, 4vw, 56px) 60px;
   min-height: 100vh;
@@ -61,7 +64,7 @@ html, body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-family: var(--serif);
+  font-family: var(--label);
   font-size: 0.78rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -85,13 +88,13 @@ html, body {
 }
 .refresh-form button:hover { background: var(--ink); color: var(--paper); }
 
+/* Blackletter kun her — navnetrekket, som i norsk avistradisjon. */
 .nameplate {
-  font-family: var(--display);
-  font-weight: 900;
-  font-size: clamp(2.6rem, 9vw, 6rem);
+  font-family: var(--blackletter);
+  font-weight: 400;
+  font-size: clamp(3rem, 10vw, 6.4rem);
   line-height: 1;
   margin: 14px 0 2px;
-  letter-spacing: -0.01em;
 }
 .motto {
   font-family: var(--display);
@@ -103,7 +106,7 @@ html, body {
   margin: 0 0 10px;
 }
 .masthead-rule {
-  font-family: var(--serif);
+  font-family: var(--label);
   font-size: 0.8rem;
   color: var(--ink-soft);
   border-top: 3px double var(--ink);
@@ -130,7 +133,7 @@ html, body {
 
 /* ---------- Kicker / felles ---------- */
 .kicker {
-  font-family: var(--serif);
+  font-family: var(--label);
   text-transform: uppercase;
   letter-spacing: 0.12em;
   font-size: 0.68rem;
@@ -157,7 +160,7 @@ html { scroll-behavior: smooth; }
   backdrop-filter: blur(4px);
   border-top: 1px solid var(--ink);
   border-bottom: 1px solid var(--ink);
-  font-family: var(--serif);
+  font-family: var(--label);
   font-size: 0.8rem;
   text-transform: uppercase;
   letter-spacing: 0.07em;
@@ -220,7 +223,7 @@ html { scroll-behavior: smooth; }
   color: var(--ink);
 }
 .reason {
-  font-family: var(--serif);
+  font-family: var(--label);
   font-style: italic;
   font-size: 0.82rem;
   color: var(--ink-soft);
@@ -266,7 +269,7 @@ html { scroll-behavior: smooth; }
 }
 .section-col { break-inside: avoid; margin-bottom: 22px; }
 .section-head {
-  font-family: var(--serif);
+  font-family: var(--label);
   text-transform: uppercase;
   letter-spacing: 0.1em;
   font-size: 0.82rem;
@@ -291,7 +294,7 @@ html { scroll-behavior: smooth; }
 }
 .body-item p { font-size: 0.88rem; line-height: 1.4; margin: 0; color: var(--ink-soft); }
 .src-tag {
-  font-family: var(--serif);
+  font-family: var(--label);
   font-size: 0.68rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -303,7 +306,7 @@ html { scroll-behavior: smooth; }
 /* ---------- Kort fortalt (briefs) ---------- */
 .briefs { margin-top: 30px; }
 .briefs-head {
-  font-family: var(--serif);
+  font-family: var(--label);
   text-transform: uppercase;
   letter-spacing: 0.12em;
   font-size: 0.82rem;
@@ -329,7 +332,7 @@ html { scroll-behavior: smooth; }
 }
 .briefs a { display: block; }
 .brief-kicker {
-  font-family: var(--serif);
+  font-family: var(--label);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   font-size: 0.62rem;
@@ -341,7 +344,7 @@ html { scroll-behavior: smooth; }
 /* ---------- Mer / paginering ---------- */
 .more-link { text-align: center; margin-top: 34px; }
 .more-link a, .pager a {
-  font-family: var(--serif);
+  font-family: var(--label);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-size: 0.85rem;
@@ -354,7 +357,7 @@ html { scroll-behavior: smooth; }
 .more-item p { font-size: 0.9rem; line-height: 1.4; margin: 0; }
 .pager { display: flex; justify-content: space-between; align-items: baseline; margin-top: 24px; }
 .pager-page {
-  font-family: var(--serif);
+  font-family: var(--label);
   font-size: 0.78rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -368,10 +371,10 @@ html { scroll-behavior: smooth; }
 /* ---------- Artikkel ---------- */
 .article-head { padding: 6px 0 14px; border-bottom: 1px solid var(--rule); }
 .article-head .theme-toggle { float: right; }
-.back { font-family: var(--serif); text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.8rem; }
+.back { font-family: var(--label); text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.8rem; }
 .single { max-width: 720px; margin: 26px auto 0; }
 .single h1 { font-family: var(--display); font-weight: 800; font-size: clamp(2rem, 5vw, 3.2rem); line-height: 1.05; margin: 6px 0 10px; }
-.byline { font-family: var(--serif); font-size: 0.85rem; color: var(--ink-soft); margin: 0 0 18px; }
+.byline { font-family: var(--label); font-size: 0.85rem; color: var(--ink-soft); margin: 0 0 18px; }
 .byline span:not(:first-child)::before { content: "·"; margin: 0 0.5em; color: var(--rule); }
 
 /* Forrige/neste-artikkel */
@@ -388,7 +391,7 @@ html { scroll-behavior: smooth; }
 .article-nav .next { text-align: right; }
 .article-nav .nav-dir {
   display: block;
-  font-family: var(--serif);
+  font-family: var(--label);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   font-size: 0.72rem;
@@ -421,14 +424,14 @@ html { scroll-behavior: smooth; }
   padding: 6px 8px 0 0;
   color: var(--accent);
 }
-.source-link { font-family: var(--serif); font-size: 0.85rem; margin-top: 26px; padding-top: 14px; border-top: 1px solid var(--rule); word-break: break-all; }
-.orig-note { font-family: var(--serif); font-style: italic; font-size: 0.8rem; color: var(--ink-soft); }
+.source-link { font-family: var(--label); font-size: 0.85rem; margin-top: 26px; padding-top: 14px; border-top: 1px solid var(--rule); word-break: break-all; }
+.orig-note { font-family: var(--label); font-style: italic; font-size: 0.8rem; color: var(--ink-soft); }
 
 /* ---------- Diverse ---------- */
 .empty { text-align: center; font-style: italic; color: var(--ink-soft); margin: 60px 0; }
 .colophon {
   text-align: center;
-  font-family: var(--serif);
+  font-family: var(--label);
   font-size: 0.75rem;
   letter-spacing: 0.05em;
   color: var(--ink-soft);
@@ -441,7 +444,7 @@ html { scroll-behavior: smooth; }
 /* ---------- Masthead-handlinger ---------- */
 .masthead-actions { display: flex; align-items: center; gap: 12px; }
 .settings-link {
-  font-family: var(--serif);
+  font-family: var(--label);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   border: 1px solid var(--ink-soft);
@@ -459,7 +462,7 @@ html { scroll-behavior: smooth; }
   border-radius: 3px;
 }
 .feedback h4 {
-  font-family: var(--serif);
+  font-family: var(--label);
   text-transform: uppercase;
   letter-spacing: 0.1em;
   font-size: 0.85rem;
@@ -477,7 +480,7 @@ html { scroll-behavior: smooth; }
   background: var(--paper);
 }
 .feedback button, .settings-form button, .src-actions button {
-  font-family: var(--serif);
+  font-family: var(--label);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   font-size: 0.82rem;
@@ -534,7 +537,7 @@ html { scroll-behavior: smooth; }
 }
 .clear-chat { margin: 0 0 12px; }
 .clear-chat button {
-  font-family: var(--serif);
+  font-family: var(--label);
   font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -545,9 +548,9 @@ html { scroll-behavior: smooth; }
   border-radius: 2px;
   cursor: pointer;
 }
-.settings-hint { font-family: var(--serif); font-size: 0.85rem; color: var(--ink-soft); margin: 0 0 14px; }
+.settings-hint { font-family: var(--label); font-size: 0.85rem; color: var(--ink-soft); margin: 0 0 14px; }
 .settings-form { display: flex; flex-direction: column; gap: 14px; max-width: 680px; }
-.settings-form label { display: flex; flex-direction: column; gap: 5px; font-family: var(--serif); font-size: 0.85rem; }
+.settings-form label { display: flex; flex-direction: column; gap: 5px; font-family: var(--label); font-size: 0.85rem; }
 .settings-form input, .settings-form textarea, .settings-form select {
   font-family: var(--body-serif);
   font-size: 1rem;
@@ -560,7 +563,7 @@ html { scroll-behavior: smooth; }
 .settings-row label { flex: 1; }
 .settings-form button { align-self: flex-start; }
 
-.sources-table { width: 100%; border-collapse: collapse; margin-bottom: 24px; font-family: var(--serif); font-size: 0.9rem; }
+.sources-table { width: 100%; border-collapse: collapse; margin-bottom: 24px; font-family: var(--label); font-size: 0.9rem; }
 .sources-table th { text-align: left; border-bottom: 2px solid var(--ink); padding: 6px 8px; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em; }
 .sources-table td { border-bottom: 1px solid var(--rule); padding: 8px; vertical-align: top; }
 .src-name { font-weight: 600; }
@@ -581,7 +584,7 @@ fieldset.topics, fieldset.lang-skip {
   gap: 12px;
 }
 fieldset.topics legend, fieldset.lang-skip legend {
-  font-family: var(--serif);
+  font-family: var(--label);
   font-size: 0.78rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -607,7 +610,7 @@ label.check input { width: auto; padding: 0; flex: none; }
   padding: 2px 0 2px 12px;
   margin: 2px 0;
 }
-.translate-explain p { font-family: var(--serif); font-size: 0.88rem; margin: 0 0 6px; }
+.translate-explain p { font-family: var(--label); font-size: 0.88rem; margin: 0 0 6px; }
 .translate-explain .settings-hint { margin: 0 0 4px; }
 .region-pick { max-width: 680px; margin-bottom: 14px; }
 .region-pick label { flex-direction: row; align-items: baseline; gap: 10px; }
@@ -636,7 +639,7 @@ label.check input { width: auto; padding: 0; flex: none; }
   padding: 9px 14px;
   background: #2f3a2f;
   color: #f2ecdd;
-  font-family: var(--serif);
+  font-family: var(--label);
   font-size: 0.85rem;
   border-radius: 3px;
 }
@@ -683,7 +686,7 @@ label.check input { width: auto; padding: 0; flex: none; }
   width: 34px;
   height: 34px;
   border-width: 3px;
-  border-color: rgba(122,43,29,0.25);
+  border-color: color-mix(in srgb, var(--accent) 25%, transparent);
   border-top-color: var(--accent);
   margin: 0 auto 16px;
 }
@@ -699,7 +702,7 @@ label.check input { width: auto; padding: 0; flex: none; }
   border-radius: 4px;
 }
 .building h3 { font-family: var(--display); font-size: 1.5rem; margin: 0 0 8px; }
-.building-detail { font-family: var(--serif); font-size: 0.95rem; color: var(--ink); margin: 0 0 14px; min-height: 1.2em; }
+.building-detail { font-family: var(--label); font-size: 0.95rem; color: var(--ink); margin: 0 0 14px; min-height: 1.2em; }
 .building-hint { font-size: 0.85rem; color: var(--ink-soft); margin: 0; }
 
 /* ---------- Innstillinger: smart-add + avansert ---------- */
@@ -708,7 +711,7 @@ label.check input { width: auto; padding: 0; flex: none; }
 .advanced { margin-top: 18px; }
 .advanced summary {
   cursor: pointer;
-  font-family: var(--serif);
+  font-family: var(--label);
   font-size: 0.85rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -800,7 +803,7 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
   gap: 9px;
   margin: 12px 0 0;
   padding: 8px 13px;
-  font-family: var(--serif);
+  font-family: var(--label);
   font-size: 0.8rem;
   letter-spacing: 0.03em;
   color: var(--ink-soft);
@@ -827,55 +830,55 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 .folio-mid a:hover { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
 .folio-current { color: var(--accent); font-weight: 700; }
 
-/* ---------- Tema per utgave ----------
-   Utgavens farge bæres av en krone øverst på arket og den doble linja i
-   mastheaden — aksenten farger allerede kickers, seksjonshoder og initialer.
-   Ettermiddag og kveld skifter i tillegg papir- og omgivelsestone, i både
-   lys og mørk drakt. Morgen = standard terrakotta på varmt papir. */
+/* ---------- Tema per utgave: døgnsyklusen ----------
+   Signaturen: blekkets farge følger døgnet. Morgen = grålysningsblå (standard
+   over), ettermiddag = rubrikkrød, kveld = fiolett skumring. Kronen øverst på
+   arket og den doble linja i mastheaden bærer fargen; papirtonen skifter bare
+   et hint med — i både lys og mørk drakt. */
 .paper { border-top: 5px solid var(--accent); }
 .masthead-rule { border-top-color: var(--accent); }
 
 body.edition-afternoon {
-  --accent: #1c5468;
-  --paper: #eef1ec;
-  --paper-shade: #e2e7e0;
-  --rule: #b7c0b3;
-  --surround: #cfd6cc;
+  --accent: #b23a2e;
+  --paper: #f4f1ec;
+  --paper-shade: #eae6df;
+  --rule: #cac4ba;
+  --surround: #d8d3ca;
 }
 body.edition-evening {
-  --accent: #58224e;
-  --paper: #ede4e4;
-  --paper-shade: #e3d7d8;
-  --rule: #c2b0b8;
-  --surround: #d3c6cb;
+  --accent: #5b3170;
+  --paper: #f1eef3;
+  --paper-shade: #e7e3ea;
+  --rule: #c4bfcc;
+  --surround: #d4cfda;
 }
 :root[data-theme="dark"] body.edition-afternoon {
-  --accent: #6fb3c9;
-  --paper: #171b1c;
-  --paper-shade: #202527;
-  --rule: #39434a;
-  --surround: #0b0e0f;
+  --accent: #e08076;
+  --paper: #1c1a19;
+  --paper-shade: #262321;
+  --rule: #403b38;
+  --surround: #100f0e;
 }
 :root[data-theme="dark"] body.edition-evening {
-  --accent: #c98bb7;
-  --paper: #1d1620;
-  --paper-shade: #271e29;
-  --rule: #463a4a;
-  --surround: #100c12;
+  --accent: #b58fca;
+  --paper: #1a181e;
+  --paper-shade: #242028;
+  --rule: #3d3844;
+  --surround: #0f0d12;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) body.edition-afternoon {
-    --accent: #6fb3c9;
-    --paper: #171b1c;
-    --paper-shade: #202527;
-    --rule: #39434a;
-    --surround: #0b0e0f;
+    --accent: #e08076;
+    --paper: #1c1a19;
+    --paper-shade: #262321;
+    --rule: #403b38;
+    --surround: #100f0e;
   }
   :root:not([data-theme="light"]) body.edition-evening {
-    --accent: #c98bb7;
-    --paper: #1d1620;
-    --paper-shade: #271e29;
-    --rule: #463a4a;
-    --surround: #100c12;
+    --accent: #b58fca;
+    --paper: #1a181e;
+    --paper-shade: #242028;
+    --rule: #3d3844;
+    --surround: #0f0d12;
   }
 }

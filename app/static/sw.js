@@ -5,7 +5,7 @@
    - /static/ assets: cache-first with background refresh.
    - everything else (e.g. the /status polling endpoint): straight to the
      network, never cached — so live progress is never served stale. */
-const CACHE = "avisa-v2";
+const CACHE = "avisa-v3";
 const SHELL = [
   "/",
   "/static/style.css",
