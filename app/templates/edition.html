@@ -6,6 +6,7 @@
     <span class="folio folio-left">{% if edition %}{{ t("No.") }} {{ edition.id }}{% endif %}</span>
     <span class="folio folio-mid">{% if edition %}{{ no_date(edition.built_at) }} · {% if editions_today|length > 1 %}{% for e in editions_today %}{% if e.id == edition.id %}<span class="folio-current">{{ kind_short(edition_kind_of(e)) }}</span>{% else %}<a href="/edition/{{ e.id }}">{{ kind_short(edition_kind_of(e)) }}</a>{% endif %}{% if not loop.last %} · {% endif %}{% endfor %}{% else %}{{ kind_label(kind) }}{% endif %}{% endif %}</span>
     <span class="masthead-actions">
+      <button type="button" class="theme-toggle" aria-label="{{ t('Toggle dark mode') }}" title="{{ t('Toggle dark mode') }}">☾</button>
       {% if auth_enabled and not is_admin %}
         <a href="/login" class="settings-link">{{ t("Log in") }}</a>
       {% else %}
@@ -21,7 +22,8 @@
   <p class="motto">{{ kind_motto(kind) }}</p>
   <div class="masthead-rule">
     {% if edition %}{{ t("Updated") }} {{ no_datetime(edition.built_at) }} <span class="edition-age" data-built="{{ edition.built_at.isoformat() }}"></span>{% else %}{{ t("Building the first edition …") }}{% endif %}
-    {% if not llm_enabled %}<span class="badge">{{ t("demo mode: no LLM — raw curation, untranslated") }}</span>{% else %}<span class="badge {{ 'warn' if not llm_health.ok else 'ok' }}" id="llm-badge">{% if not llm_health.ok %}⚠ {{ llm_health.warning }}{% else %}{{ provider_label }}{% endif %}</span>{% endif %}
+    {# LLM provider/health is ops info — only the admin sees the badge. #}
+    {% if is_admin %}{% if not llm_enabled %}<span class="badge">{{ t("demo mode: no LLM — raw curation, untranslated") }}</span>{% else %}<span class="badge {{ 'warn' if not llm_health.ok else 'ok' }}" id="llm-badge">{% if not llm_health.ok %}⚠ {{ llm_health.warning }}{% else %}{{ provider_label }}{% endif %}</span>{% endif %}{% endif %}
   </div>
 </header>
 
@@ -64,7 +66,7 @@
   {% if lead %}
   <article class="lead">
     {% if lead.image_url %}<span class="lead-figure halftone"><img class="lead-img" src="{{ lead.image_url }}" alt="" loading="lazy" onerror="this.closest('.lead-figure').remove()"></span>{% endif %}
-    <span class="kicker">{{ lead.section }}{% if source_names.get(lead.source_id) %} · {{ source_names[lead.source_id] }}{% endif %}</span>
+    <span class="kicker">{{ t(lead.section) }}{% if source_names.get(lead.source_id) %} · {{ source_names[lead.source_id] }}{% endif %}</span>
     <h2><a href="/article/{{ lead.id }}">{{ lead.display_title }}</a></h2>
     {% if lead.deck %}<p class="deck">{{ lead.deck }}</p>{% endif %}
     <p class="ingress">{{ dropcap(lead.display_summary) }}</p>
@@ -77,7 +79,7 @@
     {% for a in secondary %}
     <article class="sec-item">
       {% if a.image_url %}<img class="sec-img" src="{{ a.image_url }}" alt="" loading="lazy" onerror="this.remove()">{% endif %}
-      <span class="kicker">{{ a.section }}{% if source_names.get(a.source_id) %} · {{ source_names[a.source_id] }}{% endif %}</span>
+      <span class="kicker">{{ t(a.section) }}{% if source_names.get(a.source_id) %} · {{ source_names[a.source_id] }}{% endif %}</span>
       <h3><a href="/article/{{ a.id }}">{{ a.display_title }}</a></h3>
       {% if a.deck %}<p class="deck">{{ a.deck }}</p>{% endif %}
       <p>{{ a.display_summary|truncate(160) }}</p>
@@ -113,7 +115,7 @@
     {% for a in briefs %}
     <li>
       <a href="/article/{{ a.id }}">
-        <span class="brief-kicker">{{ a.section }}</span>
+        <span class="brief-kicker">{{ t(a.section) }}</span>
         <span class="brief-title">{{ a.display_title }}</span>
       </a>
     </li>
@@ -190,12 +192,20 @@
     return '';
   };
 
+  // Poll fast only while the pipeline runs; back off to 30 s at rest, and
+  // pause entirely while the tab is hidden (resume on visibilitychange).
   async function tick() {
+    if (document.hidden) {
+      document.addEventListener('visibilitychange', tick, { once: true });
+      return;
+    }
     let again = true;
+    let delay = 30000;
     try {
       const d = await (await fetch('/status', { cache: 'no-store' })).json();
       updateLlmBadge(d.llm);
       if (d.running) {
+        delay = 1500;
         strip.hidden = false;
         const step = d.steps ? `${T.step} ${d.step}/${d.steps} · ` : '';
         const eta = etaOf(d);
@@ -210,6 +220,7 @@
           bFill.style.width = pct + '%';
         }
       } else {
+        if (building) { delay = 1500; } // first-boot page: react quickly
         if (building && d.has_edition) { location.reload(); return; }
         if (current !== null && d.edition_id && d.edition_id !== current) {
           // Nyere utgave finnes: vis en diskret indikator og slutt å polle.
@@ -223,7 +234,7 @@
         }
       }
     } catch (e) { /* nettverksfeil — prøv igjen */ }
-    if (again) setTimeout(tick, 1500);
+    if (again) setTimeout(tick, delay);
   }
   tick();
 })();

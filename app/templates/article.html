@@ -4,10 +4,11 @@
 {% block body %}
 <header class="article-head">
   <a class="back" href="/">← {{ paper_title() }}</a>
+  <button type="button" class="theme-toggle" aria-label="{{ t('Toggle dark mode') }}" title="{{ t('Toggle dark mode') }}">☾</button>
 </header>
 
 <article class="single">
-  <span class="kicker">{{ a.section }}{% if source_name %} · {{ source_name }}{% endif %}</span>
+  <span class="kicker">{{ t(a.section) }}{% if source_name %} · {{ source_name }}{% endif %}</span>
   <h1>{{ a.display_title }}</h1>
   <p class="byline">
     {% if a.author %}<span>{{ a.author }}</span>{% endif %}

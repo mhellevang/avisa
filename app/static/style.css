@@ -173,7 +173,11 @@ html { scroll-behavior: smooth; }
   gap: 0;
   margin-top: 26px;
 }
-.lead { padding-right: 28px; border-right: 1px solid var(--rule); }
+/* Kolonnelinja bæres av .secondary (border-left), så den løper i full høyde
+   selv når hovedsaken er kortere enn spalten ved siden av. Kuratornotatet
+   ankres i bunnen av cellen, så tomrommet under hovedsaken ser komponert ut. */
+.lead { padding-right: 28px; display: flex; flex-direction: column; }
+.lead .reason { margin-top: auto; }
 .lead-figure { display: block; margin-bottom: 12px; line-height: 0; }
 .lead-img {
   width: 100%;
@@ -226,6 +230,7 @@ html { scroll-behavior: smooth; }
 
 .secondary {
   padding-left: 26px;
+  border-left: 1px solid var(--rule);
   display: flex;
   flex-direction: column;
 }
@@ -347,11 +352,22 @@ html { scroll-behavior: smooth; }
 .more-item { break-inside: avoid; margin-bottom: 18px; padding-bottom: 14px; border-bottom: 1px solid var(--rule); }
 .more-item h3 { font-family: var(--display); font-size: 1.15rem; margin: 4px 0 6px; line-height: 1.15; }
 .more-item p { font-size: 0.9rem; line-height: 1.4; margin: 0; }
-.pager { display: flex; justify-content: space-between; margin-top: 24px; }
+.pager { display: flex; justify-content: space-between; align-items: baseline; margin-top: 24px; }
+.pager-page {
+  font-family: var(--serif);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.error-page { margin: 60px 0 80px; }
+.error-page h2 { font-family: var(--display); }
 .more-title { font-family: var(--display); margin: 8px 0 0; }
 
 /* ---------- Artikkel ---------- */
 .article-head { padding: 6px 0 14px; border-bottom: 1px solid var(--rule); }
+.article-head .theme-toggle { float: right; }
 .back { font-family: var(--serif); text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.8rem; }
 .single { max-width: 720px; margin: 26px auto 0; }
 .single h1 { font-family: var(--display); font-weight: 800; font-size: clamp(2rem, 5vw, 3.2rem); line-height: 1.05; margin: 6px 0 10px; }
@@ -703,8 +719,9 @@ label.check input { width: auto; padding: 0; flex: none; }
 /* ---------- Responsiv ---------- */
 @media (max-width: 820px) {
   .frontpage { grid-template-columns: 1fr; }
-  .lead { padding-right: 0; border-right: none; border-bottom: 1px solid var(--rule); padding-bottom: 20px; }
-  .secondary { padding-left: 0; margin-top: 20px; }
+  .lead { padding-right: 0; border-bottom: 1px solid var(--rule); padding-bottom: 20px; }
+  .lead .reason { margin-top: 0; }
+  .secondary { padding-left: 0; border-left: none; margin-top: 20px; }
   .ingress { column-count: 1; }
   .sections { column-count: 1; }
   .briefs ul { columns: 1; }
@@ -733,6 +750,9 @@ label.check input { width: auto; padding: 0; flex: none; }
     overflow-x: auto;
     gap: 0 18px;
     scrollbar-width: none;
+    /* Fade i høyrekant: viser at lista kan scrolles (scrollbaren er skjult). */
+    mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
   }
   .sections-nav::-webkit-scrollbar { display: none; }
   .sections-nav a { white-space: nowrap; padding: 6px 0; flex: 0 0 auto; }
@@ -799,6 +819,7 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
   animation: newer-pulse 2.4s ease-in-out infinite;
 }
 @keyframes newer-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+@media (prefers-reduced-motion: reduce) { .newer-dot { animation: none; } }
 .newer-refresh { text-decoration: underline; text-underline-offset: 2px; }
 
 /* ---------- Dagens utgaver (lenker i folio-linja) ---------- */

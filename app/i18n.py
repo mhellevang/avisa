@@ -78,6 +78,17 @@ CATALOG: dict[str, dict[str, str]] = {
         "Building the first edition …": "Bygger første utgave …",
         "demo mode: no LLM — raw curation, untranslated":
             "demo-modus: ingen LLM — råkuratert, uoversatt",
+        # Fallback sections from sources.yaml. Curated section names are
+        # already in the paper's language and pass through t() verbatim.
+        "News": "Nyheter",
+        "World": "Verden",
+        "Domestic": "Innenriks",
+        "Technology": "Teknologi",
+        "Business": "Næringsliv",
+        "Science": "Vitenskap",
+        "Page": "Side",
+        "Page not found": "Fant ikke siden",
+        "Go to the front page →": "Til forsiden →",
         # LLM health (masthead badge + settings)
         "LLM: out of credits — curation and translation are paused":
             "LLM: tom for kreditt — kuratering og oversettelse står stille",

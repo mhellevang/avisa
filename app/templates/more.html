@@ -4,13 +4,14 @@
 {% block body %}
 <header class="article-head">
   <a class="back" href="/">← {{ paper_title() }}</a>
+  <button type="button" class="theme-toggle" aria-label="{{ t('Toggle dark mode') }}" title="{{ t('Toggle dark mode') }}">☾</button>
   <h2 class="more-title">{{ t("More stories") }}</h2>
 </header>
 
 <div class="more-list">
   {% for a in articles %}
   <article class="more-item">
-    <span class="kicker">{{ a.section }}{% if source_names.get(a.source_id) %} · {{ source_names[a.source_id] }}{% endif %}</span>
+    <span class="kicker">{{ t(a.section) }}{% if source_names.get(a.source_id) %} · {{ source_names[a.source_id] }}{% endif %}</span>
     <h3><a href="/article/{{ a.id }}">{{ a.display_title }}</a></h3>
     <p>{{ a.display_summary|truncate(180) }}</p>
   </article>
@@ -22,9 +23,10 @@
 <div class="pager">
   {% if offset > 0 %}
     <a href="/more?offset={{ [offset - limit, 0]|max }}">{{ t("← Previous") }}</a>
-  {% endif %}
+  {% else %}<span></span>{% endif %}
+  <span class="pager-page">{{ t("Page") }} {{ offset // limit + 1 }}</span>
   {% if has_next %}
     <a href="/more?offset={{ next_offset }}">{{ t("Next →") }}</a>
-  {% endif %}
+  {% else %}<span></span>{% endif %}
 </div>
 {% endblock %}

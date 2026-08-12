@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}{{ message }} — {{ paper_title() }}{% endblock %}
+{% block body %}
+<header class="article-head">
+  <a class="back" href="/">← {{ paper_title() }}</a>
+</header>
+<section class="error-page">
+  <h2>{{ message }}</h2>
+  <p><a href="/">{{ t("Go to the front page →") }}</a></p>
+</section>
+{% endblock %}

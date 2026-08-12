@@ -7,8 +7,9 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from sqlmodel import select
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import auth
+from . import auth, i18n
 from .db import get_session, init_db
 from .models import Edition
 from .pipeline import run_pipeline
@@ -40,6 +41,24 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Avisa", lifespan=lifespan)
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_error(request, exc):
+    """A styled page for 404s on HTML routes instead of FastAPI's raw JSON.
+    Everything else keeps the default JSON shape (the /status poller and
+    /article/{id}/body expect it)."""
+    if exc.status_code == 404:
+        from .routes.common import templates
+
+        return templates.TemplateResponse(
+            "error.html",
+            {"request": request, "message": i18n.current("Page not found")},
+            status_code=404,
+        )
+    from fastapi.exception_handlers import http_exception_handler
+
+    return await http_exception_handler(request, exc)
 
 
 @app.middleware("http")

@@ -43,6 +43,20 @@ _SKIP_SEGMENT_RE = re.compile(r"(?:^|-)(?:live-updates|liveticker)(?:-|$)")
 # not an article — its "body" is only a caption, so it can never read well.
 _VIDEO_HOSTS = ("youtube.com", "youtu.be", "vimeo.com", "tiktok.com")
 
+# Sponsored/advertorial items (The Register prefixes these with "SPONSORED
+# FEATURE:"). Matched only at the START of the title or summary so an editorial
+# story ABOUT sponsored content isn't dropped.
+_SPONSOR_RE = re.compile(
+    r"^\s*(sponsored\b|advertorial\b|annonse\b|annonsørinnhold\b|paid (content|post)\b)",
+    re.IGNORECASE,
+)
+
+
+def _is_sponsored(raw) -> bool:
+    return bool(
+        _SPONSOR_RE.match(raw.title or "") or _SPONSOR_RE.match(raw.summary or "")
+    )
+
 
 def _is_non_article(url: str) -> bool:
     parts = urlsplit(url)
@@ -84,11 +98,21 @@ def ingest() -> int:
                 # stories — their "body" is empty or just clue lists. Skip them.
                 if _is_non_article(raw.url):
                     continue
+                if _is_sponsored(raw):
+                    continue
                 h = _hash(raw.url)
                 exists = s.exec(
                     select(Article).where(Article.url_hash == h)
                 ).first()
                 if exists:
+                    continue
+                # Same story republished under a new URL (NRK does this):
+                # identical title from the same source = duplicate.
+                if raw.title and s.exec(
+                    select(Article).where(
+                        Article.source_id == src.id, Article.title == raw.title
+                    )
+                ).first():
                     continue
                 s.add(
                     Article(

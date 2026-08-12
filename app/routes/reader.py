@@ -75,7 +75,11 @@ def edition_view(request: Request, edition_id: int):
     with get_session() as s:
         ed = s.get(Edition, edition_id)
         if not ed:
-            return HTMLResponse(i18n.current("Edition not found"), status_code=404)
+            return templates.TemplateResponse(
+                "error.html",
+                {"request": request, "message": i18n.current("Edition not found")},
+                status_code=404,
+            )
         latest_id = s.exec(select(Edition.id).order_by(Edition.id.desc())).first()
         ctx = _edition_context(
             request, s, ed, edition_items(s, ed), is_current=ed.id == latest_id
@@ -130,7 +134,11 @@ def article(request: Request, article_id: int):
     with get_session() as s:
         a = s.get(Article, article_id)
         if not a:
-            return HTMLResponse(i18n.current("Article not found"), status_code=404)
+            return templates.TemplateResponse(
+                "error.html",
+                {"request": request, "message": i18n.current("Article not found")},
+                status_code=404,
+            )
 
         # Should the story be translated to the target language? (Not if it's
         # already in the target language or the source language is in "leave untouched".)
@@ -284,6 +292,18 @@ def more(request: Request, offset: int = 0, limit: int = 30):
         page = s.exec(q.offset(offset).limit(limit + 1)).all()
         has_next = len(page) > limit
         page = page[:limit]
+        # Same story from several sources (NTB wire copy in both NRK and
+        # Aftenposten): show it once. Within-page only — cheap, and catches
+        # the visible case without complicating the SQL pagination.
+        seen_titles: set[str] = set()
+        deduped = []
+        for a in page:
+            key = (a.display_title or "").strip().lower()
+            if key in seen_titles:
+                continue
+            seen_titles.add(key)
+            deduped.append(a)
+        page = deduped
         src_names = source_names(s)
 
     return templates.TemplateResponse(
