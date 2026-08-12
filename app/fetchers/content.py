@@ -792,10 +792,30 @@ def _is_blocked(html: str) -> bool:
     return any(m in low for m in _BOT_WALL)
 
 
-def _is_paywalled(html: str, thin: bool = True) -> bool:
+# Google's paywalled-content markup: hasPart pointing at a restricted
+# WebPageElement (Aftenposten/Schibsted: {"hasPart":{"@type":"WebPageElement",
+# "isAccessibleForFree":false,"cssSelector":".paywall"}}). Open articles on the
+# same sites carry hasPart:null, so this is far more deliberate than the
+# top-level isAccessibleForFree flag.
+_PAYWALL_PART_RE = re.compile(
+    r'\\?"(?:haspart|restrictedparts?)\\?"\s*:\s*\{[^{}]*'
+    r'\\?"isaccessibleforfree\\?"\s*:\s*\\?"?false'
+)
+
+
+def _is_paywalled(html: str, text: Optional[str]) -> bool:
+    """text is the extracted body (already None if too short/blocked)."""
     if not html:
         return False
     low = html.lower()
+    # A declared restricted part is trusted even when SOME text extracted: an
+    # Aftenposten teaser passes content_min_chars but is still only the free
+    # head of the story. Only a clearly full-length body overrides it — some
+    # client-side paywalls serve the whole text, which reads fine and shouldn't
+    # be hidden.
+    if len(text or "") < settings.content_min_chars * 3 and _PAYWALL_PART_RE.search(low):
+        return True
+    thin = text is None
     # isAccessibleForFree is the schema.org standard many newspapers expose, but
     # some fully-open sites (e.g. The Verge / Vox Media) carry
     # "isAccessibleForFree":false on articles that are actually free and extract
@@ -824,7 +844,7 @@ def _result(html: str, url: str, title: str = "") -> dict:
     return {
         "content": text,
         "image": hero,
-        "paywalled": _is_paywalled(html, thin=text is None),
+        "paywalled": _is_paywalled(html, text),
     }
 
 
