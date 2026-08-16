@@ -759,6 +759,12 @@ _PAYWALL_TEXT = (
     "subscribe to continue",
     "this article is for subscribers",
     "to continue reading",
+    # Le Monde: real paywall says "réservé aux abonnés"; server fetches often
+    # land on a custom "Accès restreint" block page instead (no hasPart markup,
+    # no _BOT_WALL marker), which left teaser-only stories unflagged.
+    "réservé aux abonnés",
+    "réservée aux abonnés",
+    "accès restreint",
 )
 
 
