@@ -250,3 +250,22 @@ def body_html(md: str) -> str:
     if html and html[0].startswith("<p>"):
         html[0] = dropcap_html(html[0])
     return "".join(html)
+
+
+def _norm(s: str) -> str:
+    return re.sub(r"[\W_]+", "", s).casefold()
+
+
+def lede_repeats(lede: str, md: str) -> bool:
+    """True when the body's first paragraph restates the lede — common when
+    the feed's summary is simply the story's opening paragraph (Aftenposten,
+    NRK), which would otherwise print the same sentence twice in a row."""
+    nl = _norm(lede or "")
+    if not nl:
+        return False
+    for block in re.split(r"\n\s*\n", md or ""):
+        b = block.strip()
+        if not b or b.startswith(("#", "![")):
+            continue
+        return _norm(b).startswith(nl)
+    return False

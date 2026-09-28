@@ -4,7 +4,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 from fastapi import FastAPI
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from sqlmodel import select
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -18,7 +18,9 @@ from .scheduler import start_scheduler, stop_scheduler
 from .seed import seed_sources
 
 # Pages that require login when ADMIN_PASSWORD is set.
-_PROTECTED = ("/settings", "/sources", "/configure", "/feedback", "/refresh")
+# /more lists the whole corpus, whose stories guests can't open (see
+# reader._readable), so it is admin-only too.
+_PROTECTED = ("/settings", "/sources", "/configure", "/feedback", "/refresh", "/more")
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
@@ -85,6 +87,12 @@ def service_worker():
         media_type="application/javascript",
         headers={"Service-Worker-Allowed": "/", "Cache-Control": "no-cache"},
     )
+
+
+@app.get("/robots.txt", include_in_schema=False)
+def robots():
+    # A personal paper: nothing to index, and crawling article pages costs LLM calls.
+    return PlainTextResponse("User-agent: *\nDisallow: /\n")
 
 
 @app.get("/manifest.webmanifest", include_in_schema=False)

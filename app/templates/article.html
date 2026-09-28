@@ -18,7 +18,7 @@
   </p>
   {% if a.image_url %}<img class="article-img" src="{{ a.image_url }}" alt="" loading="lazy" onerror="this.remove()">{% endif %}
 
-  <p class="lead-para">{{ a.display_summary }}</p>
+  {% if show_lede %}<p class="lead-para">{{ a.display_summary }}</p>{% endif %}
 
   {% set bodytext = a.content_no or a.content %}
   {% if bodytext or body_pending %}
@@ -47,6 +47,7 @@
     {% endif %}
   {% endif %}
 
+  {% if truncated %}<p class="truncated-note">{{ t("The translation stops here — the rest of the story is at the source.") }}</p>{% endif %}
   <p class="source-link">
     {{ t("Read the full story at the source:") }} <a href="{{ a.url }}" target="_blank" rel="noopener">{{ domain(a.url) or a.url }}</a>
   </p>

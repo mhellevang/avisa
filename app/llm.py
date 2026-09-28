@@ -590,8 +590,23 @@ def _cap_masked(text: str) -> str:
     """Caps masked body text to translate_body_max_chars. The cap can land in
     the middle of a ⟦CODEn⟧/⟦IMGn⟧ sentinel — strip such a severed tail so the
     model never sees (and echoes back) a half sentinel."""
-    capped = text[: settings.translate_body_max_chars]
-    return re.sub(r"⟦[^⟧]*$", "", capped)
+    cap = settings.translate_body_max_chars
+    if len(text) <= cap:
+        return text
+    capped = text[:cap]
+    # Cut at the last paragraph (else line) break so the translation ends on a
+    # whole paragraph instead of mid-sentence; the article page flags the cut.
+    cut = max(capped.rfind("\n\n"), capped.rfind("\n"))
+    if cut > cap // 2:
+        capped = capped[:cut]
+    return re.sub(r"⟦[^⟧]*$", "", capped).rstrip()
+
+
+def body_truncated(content: str) -> bool:
+    """True when _cap_masked cuts this body, i.e. a translation of it is only
+    the head of the story."""
+    masked, _ = _mask_code(content or "")
+    return len(_mask_images(masked, [])) > settings.translate_body_max_chars
 
 
 def _translator_system(target: str, *, markdown: bool = False) -> str:

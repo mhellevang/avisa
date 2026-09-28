@@ -10,7 +10,7 @@ from sqlmodel import select
 from .. import auth, i18n, llm, progress, runtime_config, scheduler
 from ..config import settings
 from ..db import get_session
-from ..markdown import body_html
+from ..markdown import body_html, lede_repeats
 from ..models import Article, Edition, EditionItem, Source, utcnow
 from ..pipeline import run_pipeline
 from .common import (
@@ -129,11 +129,25 @@ def logout():
     return resp
 
 
+def _readable(s, request: Request, a: Article | None) -> bool:
+    """Guests may only open stories that made it into an edition. Anything else
+    (the /more corpus, arbitrary ids) would let a crawler trigger paid title and
+    body translations for every row in the table."""
+    if a is None:
+        return False
+    if auth.is_authed(request):
+        return True
+    return (
+        s.exec(select(EditionItem.id).where(EditionItem.article_id == a.id)).first()
+        is not None
+    )
+
+
 @router.get("/article/{article_id}", response_class=HTMLResponse)
 def article(request: Request, article_id: int):
     with get_session() as s:
         a = s.get(Article, article_id)
-        if not a:
+        if not _readable(s, request, a):
             return templates.TemplateResponse(
                 "error.html",
                 {"request": request, "message": i18n.current("Article not found")},
@@ -212,18 +226,20 @@ def article(request: Request, article_id: int):
             "body_pending": body_pending,
             "body_translating": body_translating,
             "source_name": source_name,
+            "truncated": bool(a.content_no) and llm.body_truncated(a.content),
+            "show_lede": not lede_repeats(a.display_summary, a.content_no or a.content),
         },
     )
 
 
 @router.post("/article/{article_id}/body")
-def article_body(article_id: int):
+def article_body(request: Request, article_id: int):
     """Translates the body on demand and returns it as HTML paragraphs.
     Called by the article page after render, so opening isn't blocked. Cached
     (content_no + translated_at), so only the first time costs anything."""
     with get_session() as s:
         a = s.get(Article, article_id)
-        if not a:
+        if not _readable(s, request, a):
             return JSONResponse({"error": "not found"}, status_code=404)
 
         # On-demand full-text fetch: the body was never fetched and is empty

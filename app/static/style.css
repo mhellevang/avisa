@@ -45,6 +45,9 @@ html, body {
   color: var(--ink);
   font-family: var(--body-serif);
 }
+/* Long compounds («regjeringsforhandlinger») in big display type would
+   otherwise push the page wider than a phone. */
+h1, h2, h3 { overflow-wrap: break-word; hyphens: auto; }
 
 .paper {
   position: relative;
@@ -425,6 +428,7 @@ html { scroll-behavior: smooth; }
   color: var(--accent);
 }
 .source-link { font-family: var(--label); font-size: 0.85rem; margin-top: 26px; padding-top: 14px; border-top: 1px solid var(--rule); word-break: break-all; }
+.truncated-note { font-style: italic; color: var(--ink-soft); }
 .orig-note { font-family: var(--label); font-style: italic; font-size: 0.8rem; color: var(--ink-soft); }
 
 /* ---------- Diverse ---------- */

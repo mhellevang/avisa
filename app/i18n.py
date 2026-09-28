@@ -128,6 +128,7 @@ CATALOG: dict[str, dict[str, str]] = {
         "Couldn't translate — showing the original.":
             "Kunne ikke oversette — viser originalteksten.",
         "Read the full story at the source:": "Les hele saken hos kilden:",
+        "The translation stops here — the rest of the story is at the source.": "Oversettelsen stopper her — resten av saken finner du hos kilden.",
         "Translated from the original:": "Oversatt fra original:",
         "← Previous": "← Forrige",
         "Next →": "Neste →",
