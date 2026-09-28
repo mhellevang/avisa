@@ -226,7 +226,10 @@ def article(request: Request, article_id: int):
             "body_pending": body_pending,
             "body_translating": body_translating,
             "source_name": source_name,
-            "truncated": bool(a.content_no) and llm.body_truncated(a.content),
+            # A translation is about as long as its original; one far shorter
+            # stops early (the 60k chunking cap, or an older single-call cut).
+            "truncated": bool(a.content_no)
+            and len(a.content_no) < 0.7 * len(a.content or ""),
             "show_lede": not lede_repeats(a.display_summary, a.content_no or a.content),
         },
     )

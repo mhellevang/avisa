@@ -612,20 +612,15 @@ def needs_chunks(content: str) -> bool:
     return _masked_len(content) > settings.translate_body_max_chars
 
 
-def body_truncated(content: str) -> bool:
-    """True when even the chunked translation stops short of the whole story."""
-    return _masked_len(content) > settings.translate_long_max_chars
-
-
-def _split_masked(text: str) -> list[str]:
+def _split_masked(text: str, size: int) -> list[str]:
     """Caps the body at translate_long_max_chars, then splits it into
-    paragraph-aligned chunks of at most translate_body_max_chars each."""
+    paragraph-aligned chunks of at most `size` chars each."""
     rest = _cap_masked(text, settings.translate_long_max_chars)
     chunks = []
     while rest:
-        head = _cap_masked(rest)
+        head = _cap_masked(rest, size)
         if not head:  # a sentinel straddles the cap with no break before it
-            head = rest[: settings.translate_body_max_chars]
+            head = rest[:size]
         chunks.append(head)
         rest = rest[len(head) :].lstrip()
     return chunks
@@ -831,15 +826,23 @@ def translate_body(title: str, content: str, target: str = "English") -> Optiona
     masked = _mask_images(masked, img_blocks)
     system = _translator_system(target, markdown=True)
     parts = []
-    for body in _split_masked(masked):
+    # Half the batch cap: a JSON reply cut off by max_tokens never parses, and
+    # 16k chars of Norwegian sits right at the 6000-token limit.
+    chunks = _split_masked(masked, settings.translate_body_max_chars // 2)
+    for i, body in enumerate(chunks, 1):
         user = (
             f"Translate the body below to {target}. Keep line breaks and markdown headings. "
             'Respond ONLY with JSON: {"content": "<body>"}\n\n'
             f"TITLE (context): {title}\n"
             f"BODY:\n{body}"
         )
-        data = _extract_json(_chat(settings.translate_model, system, user, max_tokens=6000))
-        if not (isinstance(data, dict) and isinstance(data.get("content"), str)):
+        for _attempt in range(2):
+            reply, finish = _chat_ex(settings.translate_model, system, user, max_tokens=6000)
+            data = _extract_json(reply)
+            if isinstance(data, dict) and isinstance(data.get("content"), str):
+                break
+            print(f"[llm] body chunk {i}/{len(chunks)} failed (finish={finish or '?'}, {len(body)} chars)")
+        else:
             return None
         parts.append(data["content"].strip())
     return _restore_images(_restore_code("\n\n".join(parts), code_blocks), img_blocks)
