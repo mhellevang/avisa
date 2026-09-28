@@ -58,6 +58,17 @@ def _is_sponsored(raw) -> bool:
     )
 
 
+# NRK keeps a story's id ("…-1.18038339") but rewrites slug AND title as the
+# story develops, so neither url_hash nor the title check catches the update.
+_NRK_ID = re.compile(r"nrk\.no/.*-(1\.\d{6,})$")
+
+
+def _nrk_id(url: str) -> str | None:
+    parts = urlsplit(url)
+    m = _NRK_ID.search(parts.netloc + parts.path)
+    return m.group(1) if m else None
+
+
 def _is_non_article(url: str) -> bool:
     parts = urlsplit(url)
     host = parts.netloc.lower()
@@ -113,6 +124,16 @@ def ingest() -> int:
                         Article.source_id == src.id, Article.title == raw.title
                     )
                 ).first():
+                    continue
+                nrk = _nrk_id(raw.url)
+                if nrk and any(
+                    _nrk_id(u) == nrk
+                    for u in s.exec(
+                        select(Article.url).where(
+                            Article.source_id == src.id, Article.url.contains(nrk)
+                        )
+                    ).all()
+                ):
                     continue
                 s.add(
                     Article(

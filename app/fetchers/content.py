@@ -99,7 +99,8 @@ _PROMO_LINE = re.compile(
 # Standalone chrome lines that survive extraction as their own line: BBC's
 # "Published" metadata label, Schibsted "Vis mer/mindre" show-more controls,
 # NRK's poll disclaimer, and E24's "laget med kunstig intelligens" AI-summary
-# disclaimer. Anchored to the WHOLE line (after any leading bullet/heading
+# disclaimer, plus live/update badges ("Akkurat nå" on Aftenposten, "Saken
+# oppdateres!" on NRK). Anchored to the WHOLE line (after any leading bullet/heading
 # marker) so it never touches the same words used inside a real sentence.
 _CHROME_LINE = re.compile(
     r"^[-*#>\s]*(?:"
@@ -107,7 +108,9 @@ _CHROME_LINE = re.compile(
     r"|vis (?:mer|mindre)"
     r"|denne avstemningen viser ikke\b.*"
     r"|.*\blaget med kunstig intelligens\b.*"
-    r")\s*[.:]?\s*$",
+    r"|akkurat nå"
+    r"|saken (?:oppdateres|blir oppdatert|er oppdatert)"
+    r")\s*[.:!]?\s*$",
     re.I,
 )
 
@@ -182,7 +185,13 @@ def _strip_title_heading(md: str, title: str) -> str:
     ntitle = _norm_title(title) if title else ""
     for idx in range(min(3, len(blocks))):
         b = blocks[idx].strip()
-        if not b.startswith("#") or "\n" in b:
+        if "\n" in b:
+            continue
+        # Some sites (E24) repeat the headline as a plain first paragraph.
+        if not b.startswith("#"):
+            if idx == 0 and ntitle and _norm_title(b) == ntitle:
+                del blocks[idx]
+                return "\n\n".join(blocks).strip()
             continue
         heading_text = b.lstrip("#").strip()
         is_h1 = not b.startswith("##")
@@ -667,6 +676,18 @@ def _strip_empty_headings(md: str) -> str:
     return "\n".join(out).strip()
 
 
+def _strip_dangling_leadin(md: str) -> str:
+    """Drops a closing lead-in like "Se høydepunktene fra kampen her:" whose
+    video/embed was removed — only images (or nothing) follow it now."""
+    lines = md.rstrip().split("\n")
+    i = len(lines) - 1
+    while i >= 0 and (not lines[i].strip() or _IMG_ONLY_LINE.match(lines[i].strip())):
+        i -= 1
+    if i > 0 and lines[i].strip().strip("*_ ").endswith(":"):
+        return "\n".join(lines[:i]).strip()
+    return md
+
+
 def _extract_text(
     html: str, url: str, hero_url: Optional[str] = None, title: str = ""
 ) -> Optional[str]:
@@ -718,9 +739,20 @@ def _extract_text(
     if cleaned:
         # Strip: dropping a leading duplicate-of-hero image leaves blank lines.
         cleaned = _clean_images(cleaned, url, hero_url).strip() or None
+    if cleaned:
+        cleaned = _strip_dangling_leadin(cleaned) or None
     if cleaned and _looks_like_liveblog(cleaned):
         return None
     return cleaned
+
+
+def _deoverlay(img: str) -> str:
+    """The Guardian's og:image burns its logo into the corner (a signed
+    overlay param), which shows as a stray "The" in cropped thumbnails. The
+    same image resizer serves the clean original unsigned with s=none."""
+    if img.startswith("https://i.guim.co.uk/img/") and "overlay" in img:
+        return img.split("?", 1)[0] + "?width=1200&dpr=1&s=none"
+    return img
 
 
 def _og_image(html: str, url: str) -> Optional[str]:
@@ -742,7 +774,7 @@ def _og_image(html: str, url: str) -> Optional[str]:
                 # Skip obvious placeholders/logos — in that case the RSS image is better.
                 if _JUNK_IMG.search(img):
                     return None
-                return img
+                return _deoverlay(img)
     return None
 
 
@@ -844,13 +876,16 @@ def _result(html: str, url: str, title: str = "") -> dict:
     the page is a bot-wall/JS-challenge interstitial rather than the article.
     title (when known) lets extraction drop a body-leading duplicate heading."""
     hero = _og_image(html, url)
-    text = None if _is_blocked(html) else _extract_text(html, url, hero, title)
+    blocked = _is_blocked(html)
+    text = None if blocked else _extract_text(html, url, hero, title)
     if text and len(text) < settings.content_min_chars:
         text = None
     return {
         "content": text,
         "image": hero,
-        "paywalled": _is_paywalled(html, text),
+        # A bot wall reads to the reader just like a paywall: no body, only a
+        # teaser. Flag it so filter_paywalled hides it (Le Monde, The Economist).
+        "paywalled": blocked or _is_paywalled(html, text),
     }
 
 

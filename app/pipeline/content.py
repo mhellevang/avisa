@@ -66,6 +66,11 @@ def _run_fetch(targets: list[tuple[int, str, str]]) -> int:
                         prev = results.get(aid) or {}
                         if not res.get("image") and prev.get("image"):
                             res["image"] = prev["image"]
+                        # A rendered challenge page is too short to show any
+                        # wall marker; keep the static pass's verdict unless
+                        # rendering actually got the body.
+                        if not res.get("content") and prev.get("paywalled"):
+                            res["paywalled"] = True
                         results[aid] = res
         except Exception as e:
             print(f"[content] browser fallback unavailable: {e}")
