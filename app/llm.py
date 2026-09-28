@@ -586,11 +586,11 @@ def _restore_images(text: str, blocks: list[str]) -> str:
     return text
 
 
-def _cap_masked(text: str) -> str:
-    """Caps masked body text to translate_body_max_chars. The cap can land in
-    the middle of a ⟦CODEn⟧/⟦IMGn⟧ sentinel — strip such a severed tail so the
-    model never sees (and echoes back) a half sentinel."""
-    cap = settings.translate_body_max_chars
+def _cap_masked(text: str, cap: Optional[int] = None) -> str:
+    """Caps masked body text to `cap` (default translate_body_max_chars). The
+    cap can land in the middle of a ⟦CODEn⟧/⟦IMGn⟧ sentinel — strip such a
+    severed tail so the model never sees (and echoes back) a half sentinel."""
+    cap = cap or settings.translate_body_max_chars
     if len(text) <= cap:
         return text
     capped = text[:cap]
@@ -602,11 +602,33 @@ def _cap_masked(text: str) -> str:
     return re.sub(r"⟦[^⟧]*$", "", capped).rstrip()
 
 
-def body_truncated(content: str) -> bool:
-    """True when _cap_masked cuts this body, i.e. a translation of it is only
-    the head of the story."""
+def _masked_len(content: str) -> int:
     masked, _ = _mask_code(content or "")
-    return len(_mask_images(masked, [])) > settings.translate_body_max_chars
+    return len(_mask_images(masked, []))
+
+
+def needs_chunks(content: str) -> bool:
+    """True when the body is too long for one translation call."""
+    return _masked_len(content) > settings.translate_body_max_chars
+
+
+def body_truncated(content: str) -> bool:
+    """True when even the chunked translation stops short of the whole story."""
+    return _masked_len(content) > settings.translate_long_max_chars
+
+
+def _split_masked(text: str) -> list[str]:
+    """Caps the body at translate_long_max_chars, then splits it into
+    paragraph-aligned chunks of at most translate_body_max_chars each."""
+    rest = _cap_masked(text, settings.translate_long_max_chars)
+    chunks = []
+    while rest:
+        head = _cap_masked(rest)
+        if not head:  # a sentinel straddles the cap with no break before it
+            head = rest[: settings.translate_body_max_chars]
+        chunks.append(head)
+        rest = rest[len(head) :].lstrip()
+    return chunks
 
 
 def _translator_system(target: str, *, markdown: bool = False) -> str:
@@ -799,25 +821,28 @@ def translate_headlines_batch(items: list[dict], target: str = "English") -> dic
 
 def translate_body(title: str, content: str, target: str = "English") -> Optional[str]:
     """Translates ONLY the body to the target language (title as context).
-    Returns the text, or None without an LLM / on failure. Used when opening
-    stories that aren't pre-translated yet."""
+    Long reads go in paragraph-aligned chunks, one call each. Returns the
+    text, or None without an LLM / if any chunk fails — a body with a hole in
+    the middle is worse than retrying the whole thing later."""
     if not translation_enabled() or not content:
         return None
     masked, code_blocks = _mask_code(content)
     img_blocks: list[str] = []
     masked = _mask_images(masked, img_blocks)
-    body = _cap_masked(masked)
     system = _translator_system(target, markdown=True)
-    user = (
-        f"Translate the body below to {target}. Keep line breaks and markdown headings. "
-        'Respond ONLY with JSON: {"content": "<body>"}\n\n'
-        f"TITLE (context): {title}\n"
-        f"BODY:\n{body}"
-    )
-    data = _extract_json(_chat(settings.translate_model, system, user, max_tokens=6000))
-    if isinstance(data, dict) and isinstance(data.get("content"), str):
-        return _restore_images(_restore_code(data["content"], code_blocks), img_blocks)
-    return None
+    parts = []
+    for body in _split_masked(masked):
+        user = (
+            f"Translate the body below to {target}. Keep line breaks and markdown headings. "
+            'Respond ONLY with JSON: {"content": "<body>"}\n\n'
+            f"TITLE (context): {title}\n"
+            f"BODY:\n{body}"
+        )
+        data = _extract_json(_chat(settings.translate_model, system, user, max_tokens=6000))
+        if not (isinstance(data, dict) and isinstance(data.get("content"), str)):
+            return None
+        parts.append(data["content"].strip())
+    return _restore_images(_restore_code("\n\n".join(parts), code_blocks), img_blocks)
 
 
 # --------------------------------------------------------------------------- #

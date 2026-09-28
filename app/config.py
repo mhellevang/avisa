@@ -57,7 +57,8 @@ class Settings(BaseSettings):
     use_playwright: bool = True  # use the browser fallback for JS-heavy pages
     content_min_chars: int = 400  # below this the extraction counts as failed
     filter_paywalled: bool = True  # exclude stories behind a paywall
-    translate_body_max_chars: int = 16000  # cap on body text sent to translation (covers long-reads; stays within the 8000-token output budget)
+    translate_body_max_chars: int = 16000  # body chars per translation call (stays within the 8000-token output budget)
+    translate_long_max_chars: int = 60000  # longer bodies are translated in chunks up to this total; beyond it the story is cut
     translate_concurrency: int = 1  # Codex batches run sequentially
     translate_batch_chars: int = 24000  # max chars total per batch call
     translate_batch_max: int = 20  # max articles per batch call

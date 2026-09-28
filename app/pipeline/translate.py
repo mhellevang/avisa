@@ -6,7 +6,7 @@ from .. import progress, runtime_config
 from ..config import settings
 from ..db import get_session
 from ..i18n import current, lang_prompt_name
-from ..llm import translate_batch, translate_headlines_batch
+from ..llm import needs_chunks, translate_batch, translate_body, translate_headlines_batch
 from ..models import Article, Source, utcnow
 
 
@@ -62,6 +62,12 @@ def translate() -> int:
             {"id": a.id, "title": a.title, "summary": a.summary or "", "content": a.content or ""}
             for a in arts
         ]
+    # Long reads don't fit one batch slot: the batch translates only their
+    # title + lede, and the body goes through translate_body in chunks.
+    long_bodies = {t["id"]: t["content"] for t in targets if needs_chunks(t["content"])}
+    for t in targets:
+        if t["id"] in long_bodies:
+            t["content"] = ""
 
     total = len(targets)
     if not total:
@@ -83,6 +89,14 @@ def translate() -> int:
                 print(f"[translate] batch failed: {e}")
             done += len(chunk)
             progress.detail(current("Translating {done}/{total}", done=min(done, total), total=total))
+
+    # A failed chunked body stays None: the article page then translates it
+    # lazily on open (content_no is None → /article/{id}/body).
+    bodies: dict[int, str | None] = {}
+    for aid, body in long_bodies.items():
+        res = results.get(aid) or {}
+        if isinstance(res.get("title"), str) and res["title"].strip():
+            bodies[aid] = translate_body(res["title"], body, target)
 
     now = utcnow()
     translated = 0
@@ -113,6 +127,8 @@ def translate() -> int:
             a.summary_no = summary if isinstance(summary, str) else t["summary"]
             if t["content"]:
                 a.content_no = content
+            elif bodies.get(t["id"]):
+                a.content_no = bodies[t["id"]]
             a.translated_lang = plang
             a.translated_at = now
             translated += 1
