@@ -368,6 +368,8 @@ _PRUNE_XPATH = [
     # buttons — all rendered separately by the article page (the standfirst is
     # the RSS summary shown as the ingress), so in the body it only duplicates.
     '//*[contains(@class, "articleHeader")]',
+    # NRK "Hei!" box: the reporter's tips/contact CTA at the article's end.
+    '//*[contains(@class, "lp_heiboks")]',
 ]
 
 
@@ -427,6 +429,11 @@ _MD_IMG = re.compile(
 # stable asset id — key on it so hero and inline collapse to one.
 _ICHEF_ASSET = re.compile(r"/(cpsprodpb/[^/]+/live/[^/]+)$")
 
+# NRK video loops ship one responsive container per breakpoint, each with its own
+# fallback still (…/movingstill/ID/TS/ID_360.jpg, _720, _1080), so the body got
+# the same frame three times. Drop the width suffix so they share a key.
+_NRK_MOVINGSTILL_WIDTH = re.compile(r"(/movingstill/.+)_\d+(\.\w+)$")
+
 
 def _img_key(src: str) -> str:
     """Normalizes an image URL for same-image comparison: drops the query string
@@ -434,7 +441,9 @@ def _img_key(src: str) -> str:
     770×513 inline crop of the same file (…getty_123.jpg?resize=…) compare equal."""
     s = src.split("?")[0].split("#")[0].lower()
     m = _ICHEF_ASSET.search(s)
-    return m.group(1) if m else s
+    if m:
+        return m.group(1)
+    return _NRK_MOVINGSTILL_WIDTH.sub(r"\1\2", s)
 
 
 def _clean_images(md: str, base_url: str, hero_url: Optional[str] = None) -> str:
@@ -447,24 +456,39 @@ def _clean_images(md: str, base_url: str, hero_url: Optional[str] = None) -> str
 
     Also drops any inline image that is the same file as hero_url (the og:image
     shown at the top of the article) — many articles lead the body with the very
-    same figure, so without this it renders twice."""
+    same figure, so without this it renders twice. A repeated inline image is
+    kept once, at its first position, using its last src (NRK lists renditions
+    small→large, so that is the sharpest)."""
     hero_key = _img_key(hero_url) if hero_url else None
 
-    def repl(m: "re.Match") -> str:
-        alt = m.group(1)
+    def src_of(m: "re.Match") -> Optional[str]:
         raw = m.group(2).strip()
         # src is the first whitespace-delimited token — drops a markdown "title".
         src = raw.split()[0].strip("<>") if raw else ""
         if not src:
-            return ""
+            return None
         src = urljoin(base_url, src)
         if not src.lower().startswith(("http://", "https://")):
-            return ""
+            return None
         if _JUNK_IMG.search(src) or src.lower().split("?")[0].endswith(".svg"):
+            return None
+        return src
+
+    last_src: dict[str, str] = {}
+    for m in _MD_IMG.finditer(md):
+        if src := src_of(m):
+            last_src[_img_key(src)] = src
+    emitted: set[str] = set()
+
+    def repl(m: "re.Match") -> str:
+        src = src_of(m)
+        if not src:
             return ""
-        if hero_key and _img_key(src) == hero_key:
-            return ""  # same image as the hero/lead — don't show it twice
-        return f"![{alt}]({src})"
+        key = _img_key(src)
+        if key == hero_key or key in emitted:
+            return ""  # same image as the hero/lead or an earlier one
+        emitted.add(key)
+        return f"![{m.group(1)}]({last_src[key]})"
 
     return _MD_IMG.sub(repl, md)
 
