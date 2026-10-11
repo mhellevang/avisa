@@ -35,7 +35,7 @@ def make_token() -> str:
 
 
 def check_password(pw: str) -> bool:
-    return hmac.compare_digest(pw or "", settings.admin_password)
+    return hmac.compare_digest((pw or "").encode(), settings.admin_password.encode())
 
 
 def is_authed(request) -> bool:
