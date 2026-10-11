@@ -11,3 +11,4 @@ venv/
 !.env.example
 *.db-wal
 *.db-shm
+.codegraph/
